@@ -10,3 +10,4 @@ Snapshot in use: release date **2026-10-14** (`data/parquet/works/manifest.json`
   `fwci`, `citation_normalized_percentile`, `referenced_works_count`, `is_retracted`, `is_paratext`, `type`, `language`.
 - The AWS CLI must be given `--region us-east-1` (or `AWS_DEFAULT_REGION=us-east-1`); the SRC image otherwise resolves a bogus region.
 - Download: `aws s3 sync s3://openalex/data/parquet/<entity> data/raw/openalex/data/parquet/<entity> --no-sign-request --region us-east-1`
+- DuckDB >= 1.4 requires the new lambda syntax: `list_transform(xs, lambda x: ...)`, not `x -> ...`.

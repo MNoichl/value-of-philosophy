@@ -39,7 +39,7 @@ def run(cfg: Config, snapshot_root: Path, journals_csv: Path) -> pd.DataFrame:
         CREATE TEMP TABLE src AS
         SELECT id AS source_id, display_name, issn_l, issn, type, works_count,
                replace(issn_l, '-', '') AS issn_l8,
-               list_transform(coalesce(issn, []), x -> replace(x, '-', '')) AS issn8_list
+               list_transform(coalesce(issn, []), lambda x: replace(x, '-', '')) AS issn8_list
         FROM read_parquet('{sources_glob}')
         """
     )
