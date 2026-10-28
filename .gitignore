@@ -1,0 +1,30 @@
+# data never goes in git
+data/
+data
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.ndjson
+*.ndjson.gz
+*.zip
+*.gz
+old_version/snapshot_dev_sample.zip
+
+# machine-specific config
+config.toml
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# notebooks: outputs are stripped by nbstripout, checkpoints never committed
+.ipynb_checkpoints/
+
+# os / editor
+.DS_Store
+.vscode/settings.json

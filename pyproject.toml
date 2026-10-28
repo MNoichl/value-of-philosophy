@@ -1,0 +1,36 @@
+[project]
+name = "vop"
+version = "0.1.0"
+description = "Value of philosophy: citation outcomes of philosophers' papers outside philosophy journals (OpenAlex parquet snapshot)"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.3",
+    "polars>=1.20",
+    "pyarrow>=18",
+    "pandas>=2.2",
+    "numpy>=2",
+    "typer>=0.15",
+    "tomli; python_version < '3.11'",
+    "pyfixest>=0.28",
+    "statsmodels>=0.14",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8", "jupyterlab>=4", "ipykernel", "nbstripout", "pre-commit"]
+
+[project.scripts]
+vop = "vop.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vop"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"

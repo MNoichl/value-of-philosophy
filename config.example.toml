@@ -1,0 +1,28 @@
+# Copy to config.toml (git-ignored) and adjust for the machine.
+
+[paths]
+# Root of the persistent volume holding everything data-related.
+data_root = "/data/vop"
+# OpenAlex parquet snapshot root (contains works/, sources/, ... with updated_date=* partitions)
+snapshot_root = "/data/vop/raw/openalex/data/parquet"
+# Small subset for development; same layout as snapshot_root
+dev_snapshot_root = "/data/vop/dev_sample/data/parquet"
+
+[duckdb]
+threads = 14
+memory_limit = "140GB"
+temp_directory = "/data/vop/tmp"
+
+[params]
+# philosophers: minimum works and minimum share in philosophy sources
+min_works = 5
+min_share = 0.5
+# focal works year window
+year_min = 1970
+year_max = 2022
+# matching
+max_year_diff = 3
+max_author_diff = 3
+controls_per_focal = 4
+seed = 42
+citation_window_years = 5
