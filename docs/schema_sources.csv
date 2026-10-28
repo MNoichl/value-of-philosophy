@@ -1,0 +1,39 @@
+id,VARCHAR,YES,NULL,NULL,NULL
+issn_l,VARCHAR,YES,NULL,NULL,NULL
+issn,VARCHAR[],YES,NULL,NULL,NULL
+display_name,VARCHAR,YES,NULL,NULL,NULL
+host_organization,VARCHAR,YES,NULL,NULL,NULL
+host_organization_name,VARCHAR,YES,NULL,NULL,NULL
+host_organization_lineage,VARCHAR[],YES,NULL,NULL,NULL
+works_count,INTEGER,YES,NULL,NULL,NULL
+oa_works_count,INTEGER,YES,NULL,NULL,NULL
+cited_by_count,INTEGER,YES,NULL,NULL,NULL
+summary_stats,"STRUCT(""2yr_mean_citedness"" DOUBLE, h_index INTEGER, i10_index INTEGER)",YES,NULL,NULL,NULL
+is_oa,BOOLEAN,YES,NULL,NULL,NULL
+is_in_doaj,BOOLEAN,YES,NULL,NULL,NULL
+is_in_doaj_since_year,INTEGER,YES,NULL,NULL,NULL
+is_high_oa_rate,BOOLEAN,YES,NULL,NULL,NULL
+is_high_oa_rate_since_year,BIGINT,YES,NULL,NULL,NULL
+is_in_scielo,BOOLEAN,YES,NULL,NULL,NULL
+is_ojs,BOOLEAN,YES,NULL,NULL,NULL
+is_core,BOOLEAN,YES,NULL,NULL,NULL
+listed_in,VARCHAR[],YES,NULL,NULL,NULL
+is_preprint_repository,BOOLEAN,YES,NULL,NULL,NULL
+oa_flip_year,INTEGER,YES,NULL,NULL,NULL
+first_publication_year,INTEGER,YES,NULL,NULL,NULL
+last_publication_year,INTEGER,YES,NULL,NULL,NULL
+ids,"STRUCT(openalex VARCHAR, issn_l VARCHAR, issn VARCHAR[], mag VARCHAR, wikidata VARCHAR)",YES,NULL,NULL,NULL
+homepage_url,VARCHAR,YES,NULL,NULL,NULL
+apc_prices,"STRUCT(price INTEGER, currency VARCHAR)[]",YES,NULL,NULL,NULL
+apc_usd,INTEGER,YES,NULL,NULL,NULL
+apc_usd_by_year,"STRUCT(""year"" INTEGER, price INTEGER)[]",YES,NULL,NULL,NULL
+country_code,VARCHAR,YES,NULL,NULL,NULL
+societies,"STRUCT(url VARCHAR, organization VARCHAR)[]",YES,NULL,NULL,NULL
+alternate_titles,VARCHAR[],YES,NULL,NULL,NULL
+type,VARCHAR,YES,NULL,NULL,NULL
+topics,"STRUCT(id VARCHAR, display_name VARCHAR, count INTEGER, subfield STRUCT(id VARCHAR, display_name VARCHAR), field STRUCT(id VARCHAR, display_name VARCHAR), ""domain"" STRUCT(id VARCHAR, display_name VARCHAR))[]",YES,NULL,NULL,NULL
+topic_share,"STRUCT(id VARCHAR, display_name VARCHAR, ""value"" DOUBLE, subfield STRUCT(id VARCHAR, display_name VARCHAR), field STRUCT(id VARCHAR, display_name VARCHAR), ""domain"" STRUCT(id VARCHAR, display_name VARCHAR))[]",YES,NULL,NULL,NULL
+counts_by_year,"STRUCT(""year"" INTEGER, works_count INTEGER, oa_works_count INTEGER, cited_by_count INTEGER)[]",YES,NULL,NULL,NULL
+works_api_url,VARCHAR,YES,NULL,NULL,NULL
+updated_date,DATE,YES,NULL,NULL,NULL
+created_date,TIMESTAMP WITH TIME ZONE,YES,NULL,NULL,NULL

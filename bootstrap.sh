@@ -5,6 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 DATA_ROOT="${DATA_ROOT:-/data/openalex_project_storage/vop}"
+export AWS_DEFAULT_REGION=us-east-1
 
 echo "== apt packages"
 sudo apt-get update -qq

@@ -1,0 +1,51 @@
+id,VARCHAR,YES,NULL,NULL,NULL
+doi,VARCHAR,YES,NULL,NULL,NULL
+title,VARCHAR,YES,NULL,NULL,NULL
+display_name,VARCHAR,YES,NULL,NULL,NULL
+ids,"MAP(VARCHAR, VARCHAR)",YES,NULL,NULL,NULL
+indexed_in,VARCHAR[],YES,NULL,NULL,NULL
+publication_date,DATE,YES,NULL,NULL,NULL
+publication_year,INTEGER,YES,NULL,NULL,NULL
+language,VARCHAR,YES,NULL,NULL,NULL
+type,VARCHAR,YES,NULL,NULL,NULL
+authorships,"STRUCT(author STRUCT(display_name VARCHAR, id VARCHAR, orcid VARCHAR, observed_orcids VARCHAR[]), author_position VARCHAR, affiliations STRUCT(institution_ids VARCHAR[], raw_affiliation_string VARCHAR)[], countries VARCHAR[], raw_author_name VARCHAR, raw_orcid VARCHAR, is_corresponding BOOLEAN, raw_affiliation_strings VARCHAR[], institutions STRUCT(country_code VARCHAR, display_name VARCHAR, id VARCHAR, lineage VARCHAR[], ror VARCHAR, ""type"" VARCHAR)[])[]",YES,NULL,NULL,NULL
+authors_count,INTEGER,YES,NULL,NULL,NULL
+corresponding_author_ids,VARCHAR[],YES,NULL,NULL,NULL
+corresponding_institution_ids,VARCHAR[],YES,NULL,NULL,NULL
+primary_topic,"STRUCT(id VARCHAR, display_name VARCHAR, score FLOAT, subfield STRUCT(id VARCHAR, display_name VARCHAR), field STRUCT(id VARCHAR, display_name VARCHAR), ""domain"" STRUCT(id VARCHAR, display_name VARCHAR))",YES,NULL,NULL,NULL
+topics,"STRUCT(id VARCHAR, display_name VARCHAR, score FLOAT, subfield STRUCT(id VARCHAR, display_name VARCHAR), field STRUCT(id VARCHAR, display_name VARCHAR), ""domain"" STRUCT(id VARCHAR, display_name VARCHAR))[]",YES,NULL,NULL,NULL
+keywords,"STRUCT(id VARCHAR, display_name VARCHAR, score FLOAT)[]",YES,NULL,NULL,NULL
+concepts,"STRUCT(id VARCHAR, wikidata VARCHAR, display_name VARCHAR, ""level"" INTEGER, score FLOAT)[]",YES,NULL,NULL,NULL
+locations,"STRUCT(id VARCHAR, doi VARCHAR, ""source"" STRUCT(id VARCHAR, display_name VARCHAR, issn_l VARCHAR, issn VARCHAR[], is_oa BOOLEAN, is_in_doaj BOOLEAN, is_core BOOLEAN, listed_in VARCHAR[], host_organization VARCHAR, host_organization_name VARCHAR, host_organization_lineage VARCHAR[], host_organization_lineage_names VARCHAR[], ""type"" VARCHAR), is_oa BOOLEAN, is_published BOOLEAN, landing_page_url VARCHAR, pdf_url VARCHAR, raw_source_name VARCHAR, raw_type VARCHAR, provenance VARCHAR, license VARCHAR, license_id VARCHAR, ""version"" VARCHAR, is_accepted BOOLEAN)[]",YES,NULL,NULL,NULL
+locations_count,INTEGER,YES,NULL,NULL,NULL
+primary_location,"STRUCT(id VARCHAR, doi VARCHAR, ""source"" STRUCT(id VARCHAR, display_name VARCHAR, issn_l VARCHAR, issn VARCHAR[], is_oa BOOLEAN, is_in_doaj BOOLEAN, is_core BOOLEAN, listed_in VARCHAR[], host_organization VARCHAR, host_organization_name VARCHAR, host_organization_lineage VARCHAR[], host_organization_lineage_names VARCHAR[], ""type"" VARCHAR), is_oa BOOLEAN, is_published BOOLEAN, landing_page_url VARCHAR, pdf_url VARCHAR, raw_source_name VARCHAR, raw_type VARCHAR, provenance VARCHAR, license VARCHAR, license_id VARCHAR, ""version"" VARCHAR, is_accepted BOOLEAN)",YES,NULL,NULL,NULL
+best_oa_location,"STRUCT(id VARCHAR, doi VARCHAR, ""source"" STRUCT(id VARCHAR, display_name VARCHAR, issn_l VARCHAR, issn VARCHAR[], is_oa BOOLEAN, is_in_doaj BOOLEAN, is_core BOOLEAN, listed_in VARCHAR[], host_organization VARCHAR, host_organization_name VARCHAR, host_organization_lineage VARCHAR[], host_organization_lineage_names VARCHAR[], ""type"" VARCHAR), is_oa BOOLEAN, is_published BOOLEAN, landing_page_url VARCHAR, pdf_url VARCHAR, raw_source_name VARCHAR, raw_type VARCHAR, provenance VARCHAR, license VARCHAR, license_id VARCHAR, ""version"" VARCHAR, is_accepted BOOLEAN)",YES,NULL,NULL,NULL
+sustainable_development_goals,"STRUCT(id VARCHAR, display_name VARCHAR, score DOUBLE)[]",YES,NULL,NULL,NULL
+study_designs,"STRUCT(id VARCHAR, display_name VARCHAR)[]",YES,NULL,NULL,NULL
+awards,"STRUCT(id VARCHAR, display_name VARCHAR, funder_award_id VARCHAR, funder_id VARCHAR, funder_display_name VARCHAR)[]",YES,NULL,NULL,NULL
+funders,"STRUCT(id VARCHAR, display_name VARCHAR, ror VARCHAR)[]",YES,NULL,NULL,NULL
+institutions,"STRUCT(id VARCHAR, display_name VARCHAR, ror VARCHAR, country_code VARCHAR, ""type"" VARCHAR, lineage VARCHAR[])[]",YES,NULL,NULL,NULL
+countries_distinct_count,INTEGER,YES,NULL,NULL,NULL
+institutions_distinct_count,INTEGER,YES,NULL,NULL,NULL
+open_access,"STRUCT(is_oa BOOLEAN, oa_status VARCHAR, any_repository_has_fulltext BOOLEAN, oa_url VARCHAR)",YES,NULL,NULL,NULL
+is_paratext,BOOLEAN,YES,NULL,NULL,NULL
+is_retracted,BOOLEAN,YES,NULL,NULL,NULL
+is_xpac,BOOLEAN,YES,NULL,NULL,NULL
+biblio,"STRUCT(volume VARCHAR, issue VARCHAR, first_page VARCHAR, last_page VARCHAR)",YES,NULL,NULL,NULL
+volume,"STRUCT(id VARCHAR, display_name VARCHAR)",YES,NULL,NULL,NULL
+referenced_works,VARCHAR[],YES,NULL,NULL,NULL
+referenced_works_count,INTEGER,YES,NULL,NULL,NULL
+related_works,VARCHAR[],YES,NULL,NULL,NULL
+abstract_inverted_index,VARCHAR,YES,NULL,NULL,NULL
+cited_by_count,INTEGER,YES,NULL,NULL,NULL
+counts_by_year,"STRUCT(""year"" INTEGER, cited_by_count INTEGER)[]",YES,NULL,NULL,NULL
+apc_list,"STRUCT(""value"" INTEGER, currency VARCHAR, value_usd INTEGER)",YES,NULL,NULL,NULL
+apc_paid,"STRUCT(""value"" DOUBLE, currency VARCHAR, value_usd DOUBLE)",YES,NULL,NULL,NULL
+fwci,DOUBLE,YES,NULL,NULL,NULL
+citation_normalized_percentile,"STRUCT(""value"" DOUBLE, is_in_top_1_percent BOOLEAN, is_in_top_10_percent BOOLEAN)",YES,NULL,NULL,NULL
+cited_by_percentile_year,"STRUCT(min INTEGER, max INTEGER)",YES,NULL,NULL,NULL
+mesh,"STRUCT(descriptor_ui VARCHAR, descriptor_name VARCHAR, qualifier_ui VARCHAR, qualifier_name VARCHAR, is_major_topic BOOLEAN)[]",YES,NULL,NULL,NULL
+has_content,"STRUCT(pdf BOOLEAN, grobid_xml BOOLEAN)",YES,NULL,NULL,NULL
+has_fulltext,BOOLEAN,YES,NULL,NULL,NULL
+created_date,TIMESTAMP WITH TIME ZONE,YES,NULL,NULL,NULL
+updated_date,DATE,YES,NULL,NULL,NULL
