@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DATA_ROOT="${DATA_ROOT:-/data/vop}"
+DATA_ROOT="${DATA_ROOT:-/data/openalex_project_storage/vop}"
 
 echo "== apt packages"
 sudo apt-get update -qq

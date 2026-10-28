@@ -10,7 +10,7 @@ See [PLAN.md](PLAN.md) for the design and the stage-by-stage pipeline.
 ```bash
 git clone git@github.com:<you>/value_of_philosophy.git ~/value_of_philosophy
 cd ~/value_of_philosophy
-./bootstrap.sh            # installs uv, aws cli, duckdb cli, tmux; creates .venv; links data -> /data/vop
+./bootstrap.sh            # installs uv, aws cli, duckdb cli, tmux; creates .venv; links data -> /data/openalex_project_storage/vop
 cp config.example.toml config.toml   # then edit paths/threads
 uv run vop --help
 ```
