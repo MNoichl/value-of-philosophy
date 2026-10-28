@@ -27,9 +27,9 @@ def run(cfg: Config, snapshot_root: Path, journals_csv: Path) -> pd.DataFrame:
     out_dir = cfg.derived / "s01"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    pp = pd.read_csv(journals_csv, dtype=str)
+    pp = pd.read_csv(journals_csv, dtype=str, keep_default_na=False)
     pp["issn8"] = pp["issn"].map(normalize_issn)
-    pp["checksum_ok"] = pp["issn8"].map(lambda s: bool(s) and issn_checksum_ok(s))
+    pp["checksum_ok"] = pp["issn8"].map(lambda s: isinstance(s, str) and issn_checksum_ok(s))
 
     con = connect(cfg)
     con.register("pp", pp[["name", "issn8"]].dropna())
@@ -62,7 +62,7 @@ def run(cfg: Config, snapshot_root: Path, journals_csv: Path) -> pd.DataFrame:
     report["status"] = "ok"
     report.loc[report["n_sources"] == 0, "status"] = "no_openalex_match"
     report.loc[~report["checksum_ok"], "status"] = "bad_checksum"
-    report.loc[report["issn8"].isna(), "status"] = "no_issn"
+    report.loc[report["issn8"].isna() | (report["issn8"] == ""), "status"] = "no_issn"
 
     sources = matched.drop_duplicates("source_id").sort_values("works_count", ascending=False)
     sources.to_parquet(out_dir / "philosophy_sources.parquet", index=False)

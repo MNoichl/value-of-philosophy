@@ -22,7 +22,7 @@ def normalize_issn(raw: str | None) -> str | None:
 
 def issn_checksum_ok(issn8: str) -> bool:
     """Validate the ISSN check digit (ISO 3297: weights 8..2, mod 11, X = 10)."""
-    if len(issn8) != 8 or not re.fullmatch(r"[0-9]{7}[0-9X]", issn8):
+    if not isinstance(issn8, str) or len(issn8) != 8 or not re.fullmatch(r"[0-9]{7}[0-9X]", issn8):
         return False
     total = sum(int(c) * w for c, w in zip(issn8[:7], range(8, 1, -1)))
     check = (11 - total % 11) % 11
