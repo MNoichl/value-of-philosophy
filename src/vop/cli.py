@@ -14,7 +14,7 @@ def main() -> None:
 
 from vop import s01_sources  # noqa: E402
 
-app.add_typer(s01_sources.app, name="s01-sources", help="Match PhilPapers journals to OpenAlex sources.")
+app.command("s01-sources", help="Match PhilPapers journals to OpenAlex sources.")(s01_sources.main)
 
 
 @app.command()
