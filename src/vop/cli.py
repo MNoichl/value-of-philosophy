@@ -12,6 +12,11 @@ def main() -> None:
     """Value of philosophy pipeline."""
 
 
+from vop import s01_sources  # noqa: E402
+
+app.add_typer(s01_sources.app, name="s01-sources", help="Match PhilPapers journals to OpenAlex sources.")
+
+
 @app.command()
 def info() -> None:
     """Print the resolved configuration."""
