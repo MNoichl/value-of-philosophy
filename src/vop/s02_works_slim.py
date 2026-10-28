@@ -9,6 +9,7 @@ via works/deleted_ids.csv.gz. Everything downstream reads this table instead of 
 from __future__ import annotations
 
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -30,7 +31,7 @@ def run(cfg: Config, snapshot_root: Path, out_dir: Path) -> None:
 
     sql = SQL_PATH.read_text().format(works_glob=works_glob, deleted_ids=deleted)
     con = connect(cfg)
-    con.execute("SET enable_progress_bar = true")
+    con.execute(f"SET enable_progress_bar = {str(sys.stdout.isatty()).lower()}")
     t0 = time.time()
     con.execute(
         f"COPY ({sql}) TO '{out_dir}' "
