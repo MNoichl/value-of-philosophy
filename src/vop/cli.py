@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import typer
 
-app = typer.Typer(help="Value of philosophy pipeline. Stages are added as they are written.")
+app = typer.Typer(help="Value of philosophy pipeline. Stages are added as they are written.", no_args_is_help=True)
+
+
+@app.callback()
+def main() -> None:
+    """Value of philosophy pipeline."""
 
 
 @app.command()
