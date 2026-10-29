@@ -12,10 +12,11 @@ def main() -> None:
     """Value of philosophy pipeline."""
 
 
-from vop import s01_sources, s02_works_slim  # noqa: E402
+from vop import s01_sources, s02_works_slim, s03_philosophers  # noqa: E402
 
 app.command("s01-sources", help="Match PhilPapers journals to OpenAlex sources.")(s01_sources.main)
 app.command("s02-works-slim", help="One full scan of works -> slim parquet table.")(s02_works_slim.main)
+app.command("s03-philosophers", help="Per-author philosophy share; select philosophers.")(s03_philosophers.main)
 
 
 @app.command()

@@ -16,6 +16,8 @@ temp_directory = "/data/openalex_project_storage/vop/tmp"
 [params]
 # philosophers: minimum works and minimum share in philosophy sources
 min_works = 5
+# articles before this year are ignored when computing author shares
+author_year_min = 1950
 min_share = 0.5
 # focal works year window
 year_min = 1970
