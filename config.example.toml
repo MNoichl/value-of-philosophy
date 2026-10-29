@@ -22,6 +22,8 @@ min_share = 0.5
 # focal works year window
 year_min = 1970
 year_max = 2022
+# OpenAlex primary-topic subfields dropped from the focal set (philosophy published under another ISSN)
+excluded_subfields = ["Philosophy", "History and Philosophy of Science"]
 # matching
 max_year_diff = 3
 max_author_diff = 3
