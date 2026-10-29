@@ -12,19 +12,19 @@ articles AS (
       AND source_id IS NOT NULL
       AND len(author_ids) > 0
 ),
--- per work: which positions are philosophers
+-- per work: the philosopher authors, in author order
 flagged AS (
-    SELECT a.work_id,
-           list_filter(a.author_ids, lambda x: x IN (SELECT author_id FROM philosophers)) AS phil_author_ids
-    FROM articles a
-    WHERE list_has_any(a.author_ids, (SELECT list(author_id) FROM philosophers))
+    SELECT a.work_id, list(u.author_id ORDER BY u.i) AS phil_author_ids
+    FROM articles a, UNNEST(a.author_ids) WITH ORDINALITY AS u(author_id, i)
+    JOIN philosophers p ON u.author_id = p.author_id
+    GROUP BY a.work_id
 )
 SELECT
     a.*,
     f.phil_author_ids,
-    len(f.phil_author_ids)                                  AS n_philosophers,
-    a.author_ids[1] IN (SELECT author_id FROM philosophers) AS first_author_is_phil,
-    a.author_ids[-1] IN (SELECT author_id FROM philosophers) AS last_author_is_phil
+    len(f.phil_author_ids)                               AS n_philosophers,
+    list_contains(f.phil_author_ids, a.author_ids[1])    AS first_author_is_phil,
+    list_contains(f.phil_author_ids, a.author_ids[-1])   AS last_author_is_phil
 FROM articles a
 JOIN flagged f USING (work_id)
 ANTI JOIN phil_src p ON a.source_id = p.source_id
