@@ -16,6 +16,10 @@ dependencies = [
     "matplotlib>=3.9",
     "seaborn>=0.13",
     "tqdm>=4.66",
+    "pymc>=5.20",
+    "numpyro>=0.16",
+    "arviz>=0.20",
+    "nutpie>=0.13",
 ]
 
 [project.optional-dependencies]
