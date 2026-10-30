@@ -157,10 +157,15 @@ def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int) -> 
         idatas[label] = idata
         summ = az.summary(idata, var_names=["a_h", "b_h", "a_m", "b_m", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"])
         summ.insert(0, "model", label)
+        typer.echo(f"[{label}] divergences: {int(idata.sample_stats['diverging'].sum())}")
+        typer.echo(summ.round(3).to_string())
         rows.append(summ.reset_index().rename(columns={"index": "param"}))
-    comp = az.compare(idatas, ic="loo")
-    comp.to_csv(out / "loo_compare.csv")
-    typer.echo(comp.to_string())
+    try:
+        comp = az.compare(idatas)  # PSIS-LOO by default
+        comp.to_csv(out / "loo_compare.csv")
+        typer.echo(comp.to_string())
+    except Exception as e:  # noqa: BLE001
+        typer.echo(f"LOO comparison failed: {e}")
     return pd.concat(rows, ignore_index=True)
 
 
