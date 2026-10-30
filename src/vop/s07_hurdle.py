@@ -162,7 +162,7 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
     h_in = 0.42 * n + 2.4 + gap * 0.42
     fig, axes = plt.subplots(1, 2, figsize=(16, h_in), sharey=True)
     fig.subplots_adjust(top=1 - 1.35 / h_in, wspace=0.06, left=0.3, right=0.985, bottom=0.9 / h_in)
-    panels = {"hurdle": ("Cited at least once", f"observed: controls {ARROW} philosophers"),
+    panels = {"hurdle": ("Cited at least once", f"controls {ARROW} phil. (raw)"),
               "lognormal": ("Citations, if cited", "adjusted change")}
     for ax, part, idx in zip(axes, ["hurdle", "lognormal"], [1, 2]):
         recs = [r[idx] for r in all_rows]
