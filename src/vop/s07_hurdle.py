@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import gc
 import arviz as az
 import numpy as np
 import pandas as pd
@@ -256,17 +257,20 @@ def plot_covariates_by_field(bf: pd.DataFrame, path: Path) -> None:
     plt.close(fig)
 
 
-def build_bayesian(d: pd.DataFrame, with_drivers: bool) -> pm.Model:
+def build_bayesian(d: pd.DataFrame, drivers: list[str]) -> pm.Model:
     set_idx, sets = pd.factorize(d["set_id"])
     y = d["cited_by_count"].to_numpy().astype(float)
-    X = d[DRIVERS].to_numpy() if with_drivers else d[["phil"]].to_numpy()
+    X = d[drivers].to_numpy()
     # standardise the continuous drivers only; keep phil as a 0/1 indicator so its coefficient is a log-odds /
     # log-ratio directly comparable with the frequentist FE estimates
     X = X.astype(float)
     for j in range(1, X.shape[1]):
+        if set(np.unique(X[:, j])) <= {0.0, 1.0}:  # flags stay 0/1
+            continue
         sd = X[:, j].std()
+        typer.echo(f"  {drivers[j]}: mean {X[:, j].mean():.4f}, sd {sd:.4f} (coefficient is per sd)")
         X[:, j] = (X[:, j] - X[:, j].mean()) / (sd if sd > 0 else 1)
-    with pm.Model(coords={"set": sets, "driver": DRIVERS if with_drivers else ["phil"]}) as model:
+    with pm.Model(coords={"set": sets, "driver": drivers}) as model:
         # hurdle (logit of P(cited))
         a_h = pm.Normal("a_h", 0, 1.5)
         b_h = pm.Normal("b_h", 0, 1, dims="driver")
@@ -288,29 +292,26 @@ def build_bayesian(d: pd.DataFrame, with_drivers: bool) -> pm.Model:
     return model
 
 
-def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int, loglik: bool = True) -> pd.DataFrame:
-    rows, idatas = [], {}
-    for label, with_drivers in [("phil_only", False), ("with_drivers", True)]:
-        model = build_bayesian(d, with_drivers)
+def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int, loglik: bool = True,
+             fit: tuple[str, ...] = ("with_track",)) -> pd.DataFrame:
+    """Fit the named models. LOO is left to `vop s07-loo`, which works in chunks from the saved files."""
+    specs = {"phil_only": ["phil"], "with_drivers": BASE_DRIVERS, "with_track": BASE_DRIVERS + PRESTIGE_DRIVERS}
+    rows = []
+    for label in fit:
+        model = build_bayesian(d, specs[label])
         with model:
             idata = pm.sample(draws=draws, tune=tune, chains=chains, nuts_sampler="nutpie",
                               idata_kwargs={"log_likelihood": loglik}, progressbar=False)
         idata.to_netcdf(out / f"hurdle_{label}_n{d.set_id.nunique()}.nc")
         typer.echo(f"[{label}] sampled {d.set_id.nunique()} sets", err=False)
-        idatas[label] = idata
         summ = az.summary(idata, var_names=["a_h", "b_h", "a_m", "b_m", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"])
         summ.insert(0, "model", label)
         typer.echo(f"[{label}] divergences: {int(idata.sample_stats['diverging'].sum())}")
         typer.echo(summ.round(3).to_string())
         rows.append(summ.reset_index().rename(columns={"index": "param"}))
-    if not loglik:
-        return pd.concat(rows, ignore_index=True)
-    try:
-        comp = az.compare(idatas)  # PSIS-LOO by default
-        comp.to_csv(out / "loo_compare.csv")
-        typer.echo(comp.to_string())
-    except Exception as e:  # noqa: BLE001
-        typer.echo(f"LOO comparison failed: {e}")
+        d[["set_id", "work_id"]].to_parquet(out / f"hurdle_{label}_n{d.set_id.nunique()}.rows.parquet", index=False)
+        del idata, model, summ
+        gc.collect()
     return pd.concat(rows, ignore_index=True)
 
 
@@ -322,6 +323,8 @@ def main(
     loglik: bool = typer.Option(True, help="store pointwise log-likelihood for LOO (memory heavy on full data)"),
     dev: bool = typer.Option(False),
     plot_only: bool = typer.Option(False, help="redraw the field figures from the saved tables, no refitting"),
+    bayes_only: bool = typer.Option(False, help="skip the fixed-effects models and figures"),
+    fit: str = typer.Option("with_track", help="comma list: phil_only,with_drivers,with_track"),
 ) -> None:
     cfg = load_config()
     sfx = "_dev" if dev else ""
@@ -336,6 +339,11 @@ def main(
         plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
         plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
         typer.echo("figures redrawn from saved tables")
+        return
+
+    if bayes_only:
+        summ = bayesian(d, out, draws, tune, chains, loglik, tuple(fit.split(",")))
+        summ.to_csv(out / f"hurdle_bayesian_k{k}_{fit.replace(',', '_')}.csv", index=False)
         return
 
     freq = frequentist(d)
@@ -353,6 +361,6 @@ def main(
             keep = pd.Series(sorted(d["set_id"].unique())).sample(n_sets, random_state=int(cfg.params["seed"]))
             d = d[d["set_id"].isin(keep)]
             typer.echo(f"Bayesian subsample: {len(d):,} rows, {n_sets} sets")
-        summ = bayesian(d, out, draws, tune, chains, loglik)
+        summ = bayesian(d, out, draws, tune, chains, loglik, tuple(fit.split(",")))
         summ.to_csv(out / f"hurdle_bayesian_k{k}_n{n_sets or 'all'}.csv", index=False)
         typer.echo(summ.round(3).to_string(index=False))

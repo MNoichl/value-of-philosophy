@@ -12,7 +12,7 @@ def main() -> None:
     """Value of philosophy pipeline."""
 
 
-from vop import s01_sources, s02_works_slim, s03_philosophers, s04_focal_works, s05_matching, s06_analysis, s07_hurdle, s08_prestige, s07_bayes_plot  # noqa: E402
+from vop import s01_sources, s02_works_slim, s03_philosophers, s04_focal_works, s05_matching, s06_analysis, s07_hurdle, s08_prestige, s07_bayes_plot, s07_loo  # noqa: E402
 
 app.command("s01-sources", help="Match PhilPapers journals to OpenAlex sources.")(s01_sources.main)
 app.command("s02-works-slim", help="One full scan of works -> slim parquet table.")(s02_works_slim.main)
@@ -23,6 +23,7 @@ app.command("s06-analysis", help="Within-set models, descriptives, figures.")(s0
 app.command("s07-hurdle", help="Hurdle log-normal citation models (FE and Bayesian).")(s07_hurdle.main)
 app.command("s08-prestige", help="Coauthor prestige at publication time (prior-work citation percentile).")(s08_prestige.main)
 app.command("s07-bayes-plot", help="Posterior plots from saved Bayesian fits.")(s07_bayes_plot.main)
+app.command("s07-loo", help="Chunked PSIS-LOO comparison of saved fits.")(s07_loo.main)
 
 
 @app.command()
