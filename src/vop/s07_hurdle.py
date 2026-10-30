@@ -27,7 +27,7 @@ import pyfixest as pf
 import pymc as pm
 import typer
 
-from vop.config import Config, connect, load_config
+from vop.config import REPO_ROOT, Config, connect, load_config
 
 BASE_DRIVERS = ["phil", "log_refs", "year_dev", "nauth_dev"]
 PRESTIGE_DRIVERS = ["prestige_max_nonphil", "log_prior_works_max"]
@@ -311,6 +311,7 @@ def main(
     draws: int = typer.Option(1000), tune: int = typer.Option(1000), chains: int = typer.Option(4),
     loglik: bool = typer.Option(True, help="store pointwise log-likelihood for LOO (memory heavy on full data)"),
     dev: bool = typer.Option(False),
+    plot_only: bool = typer.Option(False, help="redraw the field figures from the saved tables, no refitting"),
 ) -> None:
     cfg = load_config()
     sfx = "_dev" if dev else ""
@@ -319,6 +320,14 @@ def main(
     d = load(cfg, cfg.derived / f"s05{sfx}", k)
     typer.echo(f"k={k}: {len(d):,} rows, {d.set_id.nunique():,} sets, share cited {d.cited.mean():.3f}")
 
+    if plot_only:
+        freq = pd.read_csv(out / f"hurdle_frequentist_k{k}.csv")
+        bf = pd.read_csv(out / f"hurdle_by_field_k{k}.csv")
+        plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
+        plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
+        typer.echo("figures redrawn from saved tables")
+        return
+
     freq = frequentist(d)
     freq.to_csv(out / f"hurdle_frequentist_k{k}.csv", index=False)
     typer.echo(freq.round(4).to_string(index=False))
@@ -326,7 +335,6 @@ def main(
     bf = by_field(d)
     bf.to_csv(out / f"hurdle_by_field_k{k}.csv", index=False)
     typer.echo(bf[bf.term == "phil"].round(3).to_string(index=False))
-    from vop.config import REPO_ROOT
     plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
     plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
 
