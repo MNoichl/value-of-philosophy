@@ -29,6 +29,6 @@ max_year_diff = 3
 max_author_diff = 3
 controls_per_focal = 4
 # random pre-sample per (source, year, n_authors) bucket before the pair join
-bucket_cap = 200
+bucket_cap = 50
 seed = 42
 citation_window_years = 5
