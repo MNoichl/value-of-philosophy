@@ -26,7 +26,7 @@ import pyfixest as pf  # noqa: E402
 
 from vop.config import Config, REPO_ROOT, connect, load_config  # noqa: E402
 
-from vop.plotting import CTRL, INK, PHIL, title, use_opinionated  # noqa: E402
+from vop.plotting import ARROW, CTRL, INK, PHIL, annotate, title, use_opinionated  # noqa: E402
 
 COLORS = {"Control": CTRL, "Philosopher": PHIL}
 SNAPSHOT_YEAR = 2026
@@ -139,11 +139,12 @@ def plot_coefficients(models: pd.DataFrame, path: Path, df: pd.DataFrame | None 
                                 win=c.loc[c["window_valid"], "cites_window"].mean())
     names = list(dict.fromkeys(m["model"]))
     use_opinionated()
-    fig, ax = plt.subplots(figsize=(11, 0.55 * len(m) + 2.8))
-    fig.subplots_adjust(top=1 - 2.0 / (0.55 * len(m) + 2.8), left=0.3, right=0.98, bottom=0.08)
+    h = 0.55 * len(m) + 2.6
+    fig, ax = plt.subplots(figsize=(12, h))
+    fig.subplots_adjust(top=1 - 1.35 / h, left=0.3, right=0.98, bottom=0.9 / h)
     y = 0
     ticks, labels = [], []
-    ax.text(0.26, -0.9, "controls → philosophers", fontsize=10, color=INK, va="center", fontweight="bold")
+    annotate(ax, 0.26, -0.9, f"controls {ARROW} philosophers", fontsize=10, fontweight="bold")
     for name in names:
         for _, r in m[m["model"] == name].iterrows():
             ax.errorbar(r["coef"], y, xerr=[[r["coef"] - r["ci_low"]], [r["ci_high"] - r["coef"]]],
@@ -151,14 +152,14 @@ def plot_coefficients(models: pd.DataFrame, path: Path, df: pd.DataFrame | None 
             b = base.get(int(r["k"]))
             if b:
                 if "fwci" in name:
-                    txt = f"FWCI {b['fwci']:.2f} → {b['fwci'] + r['coef']:.2f}"
+                    txt = f"FWCI {b['fwci']:.2f} {ARROW} {b['fwci'] + r['coef']:.2f}"
                 elif "window" in name:
-                    txt = f"{b['win']:.1f} → {b['win'] * np.exp(r['coef']):.1f} cites in 5 yrs ({np.exp(r['coef']) - 1:+.0%})"
+                    txt = f"{b['win']:.1f} {ARROW} {b['win'] * np.exp(r['coef']):.1f} cites in 5 yrs ({np.exp(r['coef']) - 1:+.0%})"
                 elif "Poisson" in name:
-                    txt = f"{b['mean']:.1f} → {b['mean'] * np.exp(r['coef']):.1f} cites ({np.exp(r['coef']) - 1:+.0%})"
+                    txt = f"{b['mean']:.1f} {ARROW} {b['mean'] * np.exp(r['coef']):.1f} cites ({np.exp(r['coef']) - 1:+.0%})"
                 else:
                     txt = f"{np.exp(r['coef']) - 1:+.1%} on cites+1"
-                ax.text(0.26, y, txt, va="center", fontsize=10, color=INK)
+                annotate(ax, 0.26, y, txt, fontsize=10)
             ticks.append(y)
             labels.append(f"{name}, k=±{int(r['k'])}")
             y += 1

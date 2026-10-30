@@ -107,15 +107,16 @@ def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from vop.plotting import INK, PHIL, title, use_opinionated
+    from vop.plotting import ARROW, INK, PHIL, annotate, title, use_opinionated
 
     use_opinionated()
     order = (bf[bf.part == "hurdle"].sort_values("coef")["field"]).tolist()
     n = len(order)
-    fig, axes = plt.subplots(1, 2, figsize=(15, 0.42 * n + 2.6), sharey=True)
-    fig.subplots_adjust(top=1 - 2.1 / (0.42 * n + 2.6), wspace=0.08, left=0.26, right=0.98, bottom=0.08)
-    panels = {"hurdle": ("Cited at least once", "cited at least once"),
-              "lognormal": ("Citations, if cited", "citations, if cited")}
+    h = 0.42 * n + 2.4
+    fig, axes = plt.subplots(1, 2, figsize=(16, h), sharey=True)
+    fig.subplots_adjust(top=1 - 1.35 / h, wspace=0.06, left=0.3, right=0.985, bottom=0.9 / h)
+    panels = {"hurdle": ("Cited at least once", f"controls {ARROW} philosophers"),
+              "lognormal": ("Citations, if cited", "philosophers vs controls")}
     y = np.arange(n)
     for ax, part in zip(axes, ["hurdle", "lognormal"]):
         sub = bf[bf.part == part].set_index("field").loc[order]
@@ -126,21 +127,20 @@ def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
         ax.set_xlabel("philosopher coefficient (95% CI)")
         xmax = float(sub["ci_high"].max())
         xa = xmax * 1.1
-        ax.text(xa, -0.9, panels[part][1], fontsize=10, color=INK, va="center", fontweight="bold")
+        annotate(ax, xa, -0.9, panels[part][1], fontsize=10, fontweight="bold")
         for yi, (_, r) in zip(y, sub.iterrows()):
             if part == "hurdle":
-                txt = f"{r.ctrl_share_cited:.0%} → {r.phil_share_cited:.0%}"
+                txt = f"{r.ctrl_share_cited:.0%} {ARROW} {r.phil_share_cited:.0%}"
             else:
-                pct = np.exp(r.coef) - 1
-                txt = f"{pct:+.0%}"
-            ax.text(xa, yi, txt, va="center", fontsize=10, color=INK)
+                txt = f"{np.exp(r.coef) - 1:+.0%}"
+            annotate(ax, xa, yi, txt, fontsize=10)
         ax.set_xlim(right=xmax * 1.75)
         ax.set_ylim(n - 0.5, -1.4)
         ax.grid(axis="y", visible=False)
     axes[0].set_yticks(y, [f"{f}  (n={int(bf[bf.field == f].n_sets.iloc[0]):,})" for f in order])
     title(fig, "Philosophers' papers in other fields' journals: effect by field",
           "Within matched sets (same journal, ±3 years, ±3 authors), with covariates. "
-          "Annotations: controls → philosophers (hurdle), change in citations given cited (log-normal).")
+          "Left: share of papers cited at least once. Right: change in citations among cited papers.")
     fig.savefig(path, dpi=160)
     plt.close(fig)
 

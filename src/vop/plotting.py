@@ -15,6 +15,7 @@ import matplotlib as mpl
 from matplotlib import font_manager as fm
 import matplotlib.pyplot as plt
 
+ARROW = "\u2192"  # rendered with the fallback font (Roboto Condensed has no arrow glyph)
 PHIL = "#eb6834"
 CTRL = "#2a78d6"
 INK = "#52514e"
@@ -40,7 +41,14 @@ def use_opinionated(style: str = "opinionated_rc") -> None:
         mpl.rcParams["font.sans-serif"] = [f for f in ["Fira Sans Condensed", "Fira Sans"] if f in installed] + ["DejaVu Sans"]
 
 
-def title(fig, main: str, sub: str = "", x: float = 0.02, y_main: float = 0.985, y_sub: float = 0.945) -> None:
-    fig.text(x, y_main, main, fontsize=20, fontweight="bold", ha="left", va="top")
+def title(fig, main: str, sub: str = "", x: float = 0.02) -> None:
+    """Bold title and grey subtitle at the top-left; reserves ~1.1 inch of figure height."""
+    h = fig.get_size_inches()[1]
+    fig.text(x, 1 - 0.18 / h, main, fontsize=20, fontweight="bold", ha="left", va="top")
     if sub:
-        fig.text(x, y_sub, sub, fontsize=12, ha="left", va="top", color=INK)
+        fig.text(x, 1 - 0.62 / h, sub, fontsize=12, ha="left", va="top", color=INK)
+
+
+def annotate(ax, x, y, text, **kw) -> None:
+    """Text in the ink colour with an explicit font fallback so arrows render."""
+    ax.text(x, y, text, va="center", color=INK, family=["Roboto Condensed", "DejaVu Sans"], **kw)
