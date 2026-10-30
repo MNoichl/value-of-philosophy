@@ -35,9 +35,11 @@ DRIVERS = ["phil", "log_refs", "year_dev", "nauth_dev"]
 def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     con = connect(cfg)
     d = con.execute(f"""
-        SELECT set_id, work_id, is_focal, publication_year, n_authors, cited_by_count,
-               coalesce(referenced_works_count, 0) AS n_refs, domain
-        FROM read_parquet('{s05_dir / "matched_sets.parquet"}') WHERE k = {k}
+        WITH s AS (SELECT * FROM read_parquet('{s05_dir / "matched_sets.parquet"}') WHERE k = {k}),
+             f AS (SELECT set_id, field AS set_field, domain AS set_domain FROM s WHERE is_focal)
+        SELECT s.set_id, s.work_id, s.is_focal, s.publication_year, s.n_authors, s.cited_by_count,
+               coalesce(s.referenced_works_count, 0) AS n_refs, f.set_field, f.set_domain
+        FROM s JOIN f USING (set_id)
     """).fetchdf()
     d["phil"] = d["is_focal"].astype(int)
     d["cited"] = (d["cited_by_count"] > 0).astype(int)
@@ -67,6 +69,54 @@ def frequentist(d: pd.DataFrame) -> pd.DataFrame:
             rows.append(dict(model=name, term=term, coef=b, se=se, ci_low=b - 1.96 * se, ci_high=b + 1.96 * se,
                              exp_coef=float(np.exp(b)), n_obs=int(m._N), n_sets=int(dd["set_id"].nunique())))
     return pd.DataFrame(rows)
+
+
+def by_field(d: pd.DataFrame, min_sets: int = 300) -> pd.DataFrame:
+    """Hurdle and log-normal parts (with covariates) estimated separately within each field."""
+    rows = []
+    fml = " + ".join(DRIVERS)
+    for field, dd in d.groupby("set_field"):
+        n_sets = dd["set_id"].nunique()
+        if n_sets < min_sets:
+            continue
+        try:
+            h = pf.feglm(f"cited ~ {fml} | set_id", data=dd, family="logit", vcov={"CRV1": "set_id"})
+            m = pf.feols(f"log_cites ~ {fml} | set_id", data=dd[dd.cited == 1], vcov={"CRV1": "set_id"})
+        except Exception as e:  # noqa: BLE001
+            typer.echo(f"  {field}: skipped ({str(e)[:80]})")
+            continue
+        for part, mod in [("hurdle", h), ("lognormal", m)]:
+            b, se = float(mod.coef()["phil"]), float(mod.se()["phil"])
+            rows.append(dict(field=field, part=part, n_sets=n_sets, coef=b, se=se,
+                             ci_low=b - 1.96 * se, ci_high=b + 1.96 * se))
+    return pd.DataFrame(rows)
+
+
+def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    order = (bf[bf.part == "hurdle"].sort_values("coef")["field"]).tolist()
+    fig, axes = plt.subplots(1, 2, figsize=(12, 0.38 * len(order) + 1.8), sharey=True)
+    titles = {"hurdle": "Hurdle: log-odds of any citation", "lognormal": "Log-normal: log citations given cited"}
+    for ax, part in zip(axes, ["hurdle", "lognormal"]):
+        sub = bf[bf.part == part].set_index("field").loc[order]
+        y = np.arange(len(order))
+        ax.errorbar(sub["coef"], y, xerr=[sub["coef"] - sub["ci_low"], sub["ci_high"] - sub["coef"]],
+                    fmt="o", color="#eb6834", ecolor="#eb6834", capsize=3, markersize=6)
+        ax.axvline(0, color="#52514e", linewidth=1)
+        ax.set_title(titles[part], fontsize=11)
+        ax.set_xlabel("philosopher coefficient (95% CI)")
+        for s_ in ["top", "right"]:
+            ax.spines[s_].set_visible(False)
+        ax.grid(axis="x", color="#e0dfdb", linewidth=0.8)
+    axes[0].set_yticks(np.arange(len(order)), [f"{f}  (n={int(bf[bf.field == f].n_sets.iloc[0]):,})" for f in order])
+    axes[0].invert_yaxis()
+    fig.suptitle("Philosopher effect within matched sets, by field of the focal paper (with covariates)", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
 
 
 def build_bayesian(d: pd.DataFrame, with_drivers: bool) -> pm.Model:
@@ -131,6 +181,12 @@ def main(
     freq = frequentist(d)
     freq.to_csv(out / f"hurdle_frequentist_k{k}.csv", index=False)
     typer.echo(freq.round(4).to_string(index=False))
+
+    bf = by_field(d)
+    bf.to_csv(out / f"hurdle_by_field_k{k}.csv", index=False)
+    typer.echo(bf.round(3).to_string(index=False))
+    from vop.config import REPO_ROOT
+    plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png")
 
     if bayes:
         if n_sets:
