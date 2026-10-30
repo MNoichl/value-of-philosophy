@@ -8,7 +8,8 @@ and falls back gracefully. `title()` mirrors opinionated.set_title_and_suptitle.
 from __future__ import annotations
 
 import glob
-from importlib import resources
+from importlib.util import find_spec
+from pathlib import Path
 
 import matplotlib as mpl
 from matplotlib import font_manager as fm
@@ -26,7 +27,8 @@ def use_opinionated(style: str = "opinionated_rc") -> None:
         return
     except Exception:  # noqa: BLE001
         pass
-    pkg = resources.files("opinionated")
+    spec = find_spec("opinionated")  # locate the package without importing it
+    pkg = Path(spec.submodule_search_locations[0])
     for f in glob.glob(str(pkg / "fonts" / "*.ttf")):
         fm.fontManager.addfont(f)
     plt.style.use(str(pkg / "data" / f"{style}.mplstyle"))
