@@ -101,12 +101,13 @@ def by_field(d: pd.DataFrame, min_sets: int = 300) -> pd.DataFrame:
         p0 = float(ctrl["cited"].mean())                       # controls' share cited
         med0 = float(ctrl.loc[ctrl.cited == 1, "cited_by_count"].median())  # controls' median cites | cited
         for part, mod in [("hurdle", h), ("lognormal", m)]:
-            b, se = float(mod.coef()["phil"]), float(mod.se()["phil"])
-            rows.append(dict(field=field, part=part, n_sets=n_sets, coef=b, se=se,
-                             ci_low=b - 1.96 * se, ci_high=b + 1.96 * se,
-                             ctrl_share_cited=p0, ctrl_median_cites_if_cited=med0,
-                             phil_share_cited=_shift_prob(p0, b) if part == "hurdle" else np.nan,
-                             phil_median_cites_if_cited=med0 * np.exp(b) if part == "lognormal" else np.nan))
+            for term in mod.coef().index:
+                b, se = float(mod.coef()[term]), float(mod.se()[term])
+                rows.append(dict(field=field, part=part, term=term, n_sets=n_sets, coef=b, se=se,
+                                 ci_low=b - 1.96 * se, ci_high=b + 1.96 * se,
+                                 ctrl_share_cited=p0, ctrl_median_cites_if_cited=med0,
+                                 phil_share_cited=_shift_prob(p0, b) if (part, term) == ("hurdle", "phil") else np.nan,
+                                 phil_median_cites_if_cited=med0 * np.exp(b) if (part, term) == ("lognormal", "phil") else np.nan))
     return pd.DataFrame(rows)
 
 
@@ -122,6 +123,7 @@ def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
     from vop.plotting import ARROW, INK, PHIL, annotate, title, use_opinionated
 
     use_opinionated()
+    bf = bf[bf.term == "phil"]
     order = (bf[bf.part == "hurdle"].sort_values("coef")["field"]).tolist()
     n = len(order)
     h = 0.42 * n + 2.4
@@ -153,6 +155,58 @@ def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
     title(fig, "Philosophers' papers in other fields' journals: effect by field",
           "Within matched sets (same journal, ±3 years, ±3 authors), with covariates. "
           "Left: share of papers cited at least once. Right: change in citations among cited papers.")
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+COVARIATE_LABELS = {
+    "year_dev": ("Publication year", "per year later than the set mean"),
+    "nauth_dev": ("Number of authors", "per additional author"),
+    "log_refs": ("Reference-list length", "per log unit of references"),
+    "prestige_max_nonphil": ("Coauthor prestige", "0 → 1 percentile of best non-philosopher coauthor"),
+    "log_prior_works_max": ("Senior-author career length", "per log unit of prior works"),
+}
+
+
+def plot_covariates_by_field(bf: pd.DataFrame, path: Path) -> None:
+    """One column per covariate, hurdle on top and log-normal below, one row per field."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from vop.plotting import CTRL, INK, annotate, title, use_opinionated
+
+    use_opinionated()
+    terms = [t for t in COVARIATE_LABELS if t in set(bf.term)]
+    order = bf[(bf.part == "hurdle") & (bf.term == "phil")].sort_values("coef")["field"].tolist()
+    n = len(order)
+    h = 2 * (0.3 * n + 1.2) + 1.6
+    fig, axes = plt.subplots(2, len(terms), figsize=(4.2 * len(terms) + 3, h), sharey=True)
+    fig.subplots_adjust(top=1 - 1.3 / h, bottom=0.6 / h, left=0.22, right=0.985, wspace=0.08, hspace=0.25)
+    y = np.arange(n)
+    for j, term in enumerate(terms):
+        for i, part in enumerate(["hurdle", "lognormal"]):
+            ax = axes[i, j]
+            sub = bf[(bf.part == part) & (bf.term == term)].set_index("field").reindex(order)
+            ax.errorbar(sub["coef"], y, xerr=[sub["coef"] - sub["ci_low"], sub["ci_high"] - sub["coef"]],
+                        fmt="o", color=CTRL, ecolor=CTRL, capsize=3, markersize=5, linewidth=1.3)
+            ax.axvline(0, color=INK, linewidth=1)
+            ax.set_ylim(n - 0.5, -0.8)
+            ax.grid(axis="y", visible=False)
+            if i == 0:
+                ax.set_title(COVARIATE_LABELS[term][0], loc="left", fontsize=13)
+            ax.set_xlabel(("odds of any citation" if part == "hurdle" else "citations if cited")
+                          + f", {COVARIATE_LABELS[term][1]}", fontsize=9)
+            xmax = float(sub["ci_high"].max())
+            for yi, (_, r) in zip(y, sub.iterrows()):
+                annotate(ax, xmax * 1.08, yi, f"{np.exp(r.coef) - 1:+.0%}", fontsize=8)
+            ax.set_xlim(right=xmax * 1.6)
+    for i in range(2):
+        axes[i, 0].set_yticks(y, order)
+    axes[0, 0].set_ylabel("Hurdle", fontsize=12)
+    axes[1, 0].set_ylabel("Log-normal", fontsize=12)
+    title(fig, "Covariate effects by field",
+          "Same within-set models as the philosopher plot. Annotations: multiplicative change per unit "
+          "(odds in the top row, citations in the bottom row).")
     fig.savefig(path, dpi=160)
     plt.close(fig)
 
@@ -236,9 +290,10 @@ def main(
 
     bf = by_field(d)
     bf.to_csv(out / f"hurdle_by_field_k{k}.csv", index=False)
-    typer.echo(bf.round(3).to_string(index=False))
+    typer.echo(bf[bf.term == "phil"].round(3).to_string(index=False))
     from vop.config import REPO_ROOT
     plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png")
+    plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
 
     if bayes:
         if n_sets:
