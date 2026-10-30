@@ -144,7 +144,7 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
     pooled_rows = []
     if pooled is not None and d is not None:
         p0, p1 = float(d.loc[d.phil == 0, "cited"].mean()), float(d.loc[d.phil == 1, "cited"].mean())
-        extra = [(t, COVARIATE_LABELS[t][0].replace("Top author prestige", "All fields: top author prestige 0→1")
+        extra = [(t, COVARIATE_LABELS[t][0].replace("Top author prestige", "All fields: top author prestige, 0 to 1")
                   .replace("Senior-author career length", "All fields: senior author prior works ×2.7"))
                  for t in PRESTIGE_DRIVERS if t in set(pooled.term)]
         for term, label in POOLED_ROWS + extra:
