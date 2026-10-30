@@ -151,20 +151,23 @@ def build_bayesian(d: pd.DataFrame, with_drivers: bool) -> pm.Model:
     return model
 
 
-def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int) -> pd.DataFrame:
+def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int, loglik: bool = True) -> pd.DataFrame:
     rows, idatas = [], {}
     for label, with_drivers in [("phil_only", False), ("with_drivers", True)]:
         model = build_bayesian(d, with_drivers)
         with model:
             idata = pm.sample(draws=draws, tune=tune, chains=chains, nuts_sampler="nutpie",
-                              idata_kwargs={"log_likelihood": True}, progressbar=False)
-        idata.to_netcdf(out / f"hurdle_{label}.nc")
+                              idata_kwargs={"log_likelihood": loglik}, progressbar=False)
+        idata.to_netcdf(out / f"hurdle_{label}_n{d.set_id.nunique()}.nc")
+        typer.echo(f"[{label}] sampled {d.set_id.nunique()} sets", err=False)
         idatas[label] = idata
         summ = az.summary(idata, var_names=["a_h", "b_h", "a_m", "b_m", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"])
         summ.insert(0, "model", label)
         typer.echo(f"[{label}] divergences: {int(idata.sample_stats['diverging'].sum())}")
         typer.echo(summ.round(3).to_string())
         rows.append(summ.reset_index().rename(columns={"index": "param"}))
+    if not loglik:
+        return pd.concat(rows, ignore_index=True)
     try:
         comp = az.compare(idatas)  # PSIS-LOO by default
         comp.to_csv(out / "loo_compare.csv")
@@ -179,6 +182,7 @@ def main(
     bayes: bool = typer.Option(False, help="also fit the Bayesian hurdle log-normal"),
     n_sets: int = typer.Option(0, help="Bayesian: random subsample of this many sets (0 = all)"),
     draws: int = typer.Option(1000), tune: int = typer.Option(1000), chains: int = typer.Option(4),
+    loglik: bool = typer.Option(True, help="store pointwise log-likelihood for LOO (memory heavy on full data)"),
     dev: bool = typer.Option(False),
 ) -> None:
     cfg = load_config()
@@ -203,6 +207,6 @@ def main(
             keep = pd.Series(sorted(d["set_id"].unique())).sample(n_sets, random_state=int(cfg.params["seed"]))
             d = d[d["set_id"].isin(keep)]
             typer.echo(f"Bayesian subsample: {len(d):,} rows, {n_sets} sets")
-        summ = bayesian(d, out, draws, tune, chains)
+        summ = bayesian(d, out, draws, tune, chains, loglik)
         summ.to_csv(out / f"hurdle_bayesian_k{k}_n{n_sets or 'all'}.csv", index=False)
         typer.echo(summ.round(3).to_string(index=False))
