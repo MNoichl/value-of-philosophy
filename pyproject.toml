@@ -20,6 +20,7 @@ dependencies = [
     "numpyro>=0.16",
     "arviz>=0.20",
     "nutpie>=0.13",
+    "h5netcdf>=1.4",
 ]
 
 [project.optional-dependencies]
