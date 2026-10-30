@@ -53,7 +53,8 @@ def run(cfg: Config, slim_dir: Path, s05_dir: Path, out_dir: Path) -> None:
         FROM papers p JOIN ids i USING (work_id), UNNEST(i.author_ids) AS u(author_id)""",
         tmp / "paper_authors.parquet", t0)  # noqa: E111
 
-    # 2. every work of every sample author: year and citations.
+    # 2. every work of every sample author: year and citations. An author can repeat within a work's
+    #    author list (0.4% of rows here), so step 3 deduplicates (author, work).
     #    Done one publication-year partition at a time: the unnest over the whole slim table does not
     #    fit in memory on the 31 GB box even when streamed, but each year partition does.
     aw_dir = tmp / "author_works_cnp"
@@ -85,7 +86,7 @@ def run(cfg: Config, slim_dir: Path, s05_dir: Path, out_dir: Path) -> None:
           SELECT pa.work_id, pa.author_id, pa.set_field, pa.publication_year,
                  coalesce(sum(aw.cited_by_count), 0) AS prior_cites, count(aw.work_id) AS prior_works,
                  avg(aw.cnp) AS mean_cnp, count(aw.cnp) AS n_scored
-          FROM pa LEFT JOIN read_parquet('{aw_glob}') aw
+          FROM pa LEFT JOIN (SELECT DISTINCT author_id, work_id, publication_year, cited_by_count, cnp FROM read_parquet('{aw_glob}')) aw
             ON aw.author_id = pa.author_id AND aw.publication_year < pa.publication_year
           GROUP BY 1, 2, 3, 4)
         SELECT *, percent_rank() OVER (PARTITION BY set_field, publication_year ORDER BY prior_cites) AS pct
