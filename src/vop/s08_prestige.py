@@ -35,7 +35,7 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
     slim_glob = str(slim_dir / "*" / "*.parquet")
     sets = s05_dir / "matched_sets.parquet"
     con = connect(cfg)
-    con.execute("SET threads = 3")  # the unnest over the full slim table is memory-bound on this box
+    con.execute("SET threads = 3")
     t0 = time.time()
 
     # 1. papers in the sample with their authors, field and year (any k; one row per paper-author)
@@ -51,16 +51,30 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
         FROM papers p JOIN ids i USING (work_id), UNNEST(i.author_ids) AS u(author_id)""",
         tmp / "paper_authors.parquet", t0)  # noqa: E111
 
-    # 2. every work of every sample author: year and citations
-    _step(con, "author_works", f"""
-        WITH authors AS (SELECT DISTINCT author_id FROM read_parquet('{tmp / "paper_authors.parquet"}'))
-        -- no DISTINCT here: author_ids are unique within a work, and a hash-distinct over the whole
-        -- unnest output does not fit in memory on the 31 GB box; the stream below just filters and writes
-        SELECT u.author_id, w.work_id, w.publication_year, w.cited_by_count
-        FROM read_parquet('{slim_glob}', hive_partitioning = true) w, UNNEST(w.author_ids) AS u(author_id)
-        SEMI JOIN authors a ON u.author_id = a.author_id
-        WHERE w.type = 'article' AND NOT coalesce(w.is_paratext, false) AND w.publication_year IS NOT NULL""",
-        tmp / "author_works.parquet", t0)
+    # 2. every work of every sample author: year and citations.
+    #    Done one publication-year partition at a time: the unnest over the whole slim table does not
+    #    fit in memory on the 31 GB box even when streamed, but each year partition does.
+    aw_dir = tmp / "author_works"
+    aw_dir.mkdir(exist_ok=True)
+    parts = sorted(p for p in slim_dir.iterdir() if p.name.startswith("publication_year="))
+    for i, part in enumerate(parts):
+        out = aw_dir / f"{part.name}.parquet"
+        if out.exists():
+            continue
+        con.execute(f"""
+            COPY (
+              WITH authors AS (SELECT DISTINCT author_id FROM read_parquet('{tmp / "paper_authors.parquet"}'))
+              SELECT u.author_id, w.work_id, w.publication_year, w.cited_by_count
+              FROM read_parquet('{part}/*.parquet', hive_partitioning = true) w, UNNEST(w.author_ids) AS u(author_id)
+              SEMI JOIN authors a ON u.author_id = a.author_id
+              WHERE w.type = 'article' AND NOT coalesce(w.is_paratext, false) AND w.publication_year IS NOT NULL
+            ) TO '{out}' (FORMAT parquet, COMPRESSION zstd)""")
+        if i % 25 == 0:
+            typer.echo(f"[{(time.time() - t0) / 60:6.1f} min] author_works: {i + 1}/{len(parts)} partitions")
+            sys.stdout.flush()
+    n = con.execute(f"SELECT count(*) FROM read_parquet('{aw_dir}/*.parquet')").fetchone()[0]
+    typer.echo(f"[{(time.time() - t0) / 60:6.1f} min] author_works: {n:,} rows")
+    aw_glob = f"{aw_dir}/*.parquet"
 
     # 3. prior-work citations per (paper, author), percentile within field x year
     _step(con, "author_prestige", f"""
@@ -68,7 +82,7 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
         prior AS (
           SELECT pa.work_id, pa.author_id, pa.set_field, pa.publication_year,
                  coalesce(sum(aw.cited_by_count), 0) AS prior_cites, count(aw.work_id) AS prior_works
-          FROM pa LEFT JOIN read_parquet('{tmp / "author_works.parquet"}') aw
+          FROM pa LEFT JOIN read_parquet('{aw_glob}') aw
             ON aw.author_id = pa.author_id AND aw.publication_year < pa.publication_year
           GROUP BY 1, 2, 3, 4)
         SELECT *, percent_rank() OVER (PARTITION BY set_field, publication_year ORDER BY prior_cites) AS pct
