@@ -30,7 +30,7 @@ import typer
 from vop.config import REPO_ROOT, Config, connect, load_config
 
 BASE_DRIVERS = ["phil", "log_refs", "year_dev", "nauth_dev"]
-PRESTIGE_DRIVERS = ["prestige_max_nonphil", "log_prior_works_max"]
+PRESTIGE_DRIVERS = ["prestige_max", "log_prior_works_max"]  # all authors: symmetric between focal and control
 DRIVERS = list(BASE_DRIVERS)  # extended at runtime when s08 output exists
 
 
@@ -53,7 +53,7 @@ def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     if prestige.exists():
         pr = con.execute(f"SELECT * FROM read_parquet('{prestige}')").fetchdf()
         d = d.merge(pr, on="work_id", how="left")
-        d["prestige_max_nonphil"] = d["prestige_max_nonphil"].fillna(0.0)  # no non-philosopher coauthor
+        d["prestige_max"] = d["prestige_max"].fillna(0.0)
         d["log_prior_works_max"] = np.log1p(d["n_prior_works_max"].fillna(0))
         for c in PRESTIGE_DRIVERS:
             if c not in DRIVERS:
@@ -144,7 +144,7 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
     pooled_rows = []
     if pooled is not None and d is not None:
         p0, p1 = float(d.loc[d.phil == 0, "cited"].mean()), float(d.loc[d.phil == 1, "cited"].mean())
-        extra = [(t, COVARIATE_LABELS[t][0].replace("Coauthor prestige", "All fields: coauthor prestige 0→1")
+        extra = [(t, COVARIATE_LABELS[t][0].replace("Top author prestige", "All fields: top author prestige 0→1")
                   .replace("Senior-author career length", "All fields: senior author prior works ×2.7"))
                  for t in PRESTIGE_DRIVERS if t in set(pooled.term)]
         for term, label in POOLED_ROWS + extra:
@@ -201,7 +201,7 @@ COVARIATE_LABELS = {
     "year_dev": ("Publication year", "per year later than the set mean"),
     "nauth_dev": ("Number of authors", "per additional author"),
     "log_refs": ("Reference-list length", "per log unit of references"),
-    "prestige_max_nonphil": ("Coauthor prestige", "0 → 1 percentile of best non-philosopher coauthor"),
+    "prestige_max": ("Top author prestige", "0 → 1 percentile of the highest-ranked author"),
     "log_prior_works_max": ("Senior-author career length", "per log unit of prior works"),
 }
 
