@@ -134,13 +134,16 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
     fields = bf[(bf.term == "phil") & (bf.part == "hurdle")].sort_values("coef")["field"].tolist()
     rows = []  # (label, hurdle row, lognormal row, is_phil)
     for f in fields:
-        h = bf[(bf.field == f) & (bf.term == "phil") & (bf.part == "hurdle")].iloc[0]
+        h = bf[(bf.field == f) & (bf.term == "phil") & (bf.part == "hurdle")].iloc[0].copy()
         m = bf[(bf.field == f) & (bf.term == "phil") & (bf.part == "lognormal")].iloc[0]
+        if d is not None:  # label with observed shares; FE-logit coefficients do not translate into shares
+            sub = d[d.set_field == f]
+            h["ctrl_share_cited"] = float(sub.loc[sub.phil == 0, "cited"].mean())
+            h["phil_share_cited"] = float(sub.loc[sub.phil == 1, "cited"].mean())
         rows.append((f"{f}  (n={int(h.n_sets):,})", h, m, True))
     pooled_rows = []
     if pooled is not None and d is not None:
-        ctrl = d[d.phil == 0]
-        p0 = float(ctrl["cited"].mean())
+        p0, p1 = float(d.loc[d.phil == 0, "cited"].mean()), float(d.loc[d.phil == 1, "cited"].mean())
         extra = [(t, COVARIATE_LABELS[t][0].replace("Coauthor prestige", "All fields: coauthor prestige 0→1")
                   .replace("Senior-author career length", "All fields: senior author prior works ×2.7"))
                  for t in PRESTIGE_DRIVERS if t in set(pooled.term)]
@@ -150,7 +153,7 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
             if hp.empty or mp.empty:
                 continue
             h, m = hp.iloc[0].copy(), mp.iloc[0].copy()
-            h["ctrl_share_cited"], h["phil_share_cited"] = p0, _shift_prob(p0, float(h.coef))
+            h["ctrl_share_cited"], h["phil_share_cited"] = p0, p1
             pooled_rows.append((label, h, m, term == "phil"))
     all_rows = rows + pooled_rows
     n = len(all_rows)
@@ -159,8 +162,8 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
     h_in = 0.42 * n + 2.4 + gap * 0.42
     fig, axes = plt.subplots(1, 2, figsize=(16, h_in), sharey=True)
     fig.subplots_adjust(top=1 - 1.35 / h_in, wspace=0.06, left=0.3, right=0.985, bottom=0.9 / h_in)
-    panels = {"hurdle": ("Cited at least once", f"controls {ARROW} philosophers"),
-              "lognormal": ("Citations, if cited", "philosophers vs controls")}
+    panels = {"hurdle": ("Cited at least once", f"observed: controls {ARROW} philosophers"),
+              "lognormal": ("Citations, if cited", "adjusted change")}
     for ax, part, idx in zip(axes, ["hurdle", "lognormal"], [1, 2]):
         recs = [r[idx] for r in all_rows]
         cols = [PHIL if r[3] else CTRL for r in all_rows]
@@ -188,8 +191,8 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
             ax.axhline(len(rows) - 0.5 + gap / 2, color="#d0cfca", linewidth=1)
     axes[0].set_yticks(ys, [r[0] for r in all_rows])
     title(fig, "Philosophers' papers in other fields' journals: effect by field",
-          "Within matched sets (same journal, ±3 years, ±3 authors), with covariates. Orange: philosopher effect; "
-          "blue: covariate effects pooled over all fields, per unit.")
+          "Points: within-set coefficients with covariates (orange philosopher, blue pooled covariates per unit). "
+          "Left labels: raw observed shares, not derived from the coefficient.")
     fig.savefig(path, dpi=160)
     plt.close(fig)
 
