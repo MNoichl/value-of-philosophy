@@ -12,10 +12,11 @@ def main() -> None:
     """Value of philosophy pipeline."""
 
 
-from vop import s01_sources, s02_works_slim, s03_philosophers, s04_focal_works, s05_matching, s06_analysis, s07_hurdle, s08_prestige, s07_bayes_plot, s07_loo  # noqa: E402
+from vop import s01_sources, s02_works_slim, s03_philosophers, s04_focal_works, s05_matching, s06_analysis, s07_hurdle, s08_prestige, s07_bayes_plot, s07_loo, s02b_works_meta  # noqa: E402
 
 app.command("s01-sources", help="Match PhilPapers journals to OpenAlex sources.")(s01_sources.main)
 app.command("s02-works-slim", help="One full scan of works -> slim parquet table.")(s02_works_slim.main)
+app.command("s02b-works-meta", help="Abstract, pages and title for all articles (light scan).")(s02b_works_meta.main)
 app.command("s03-philosophers", help="Per-author philosophy share; select philosophers.")(s03_philosophers.main)
 app.command("s04-focal-works", help="Philosophers' articles in non-philosophy sources.")(s04_focal_works.main)
 app.command("s05-matching", help="Sample matched controls per focal work.")(s05_matching.main)
