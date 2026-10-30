@@ -30,7 +30,7 @@ import typer
 from vop.config import REPO_ROOT, Config, connect, load_config
 
 BASE_DRIVERS = ["phil", "log_refs", "year_dev", "nauth_dev"]
-PRESTIGE_DRIVERS = ["prestige_max", "log_prior_works_max"]  # all authors: symmetric between focal and control
+PRESTIGE_DRIVERS = ["prestige_cnp", "no_prior_record", "log_prior_works_max"]  # all authors: symmetric between focal and control
 DRIVERS = list(BASE_DRIVERS)  # extended at runtime when s08 output exists
 
 
@@ -53,7 +53,9 @@ def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     if prestige.exists():
         pr = con.execute(f"SELECT * FROM read_parquet('{prestige}')").fetchdf()
         d = d.merge(pr, on="work_id", how="left")
-        d["prestige_max"] = d["prestige_max"].fillna(0.0)
+        # no scored earlier paper: flag it and centre the score, so the flag reads relative to an average record
+        d["no_prior_record"] = d["prestige_cnp"].isna().astype(int)
+        d["prestige_cnp"] = d["prestige_cnp"].fillna(d["prestige_cnp"].mean())
         d["log_prior_works_max"] = np.log1p(d["n_prior_works_max"].fillna(0))
         for c in PRESTIGE_DRIVERS:
             if c not in DRIVERS:
@@ -144,7 +146,8 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
     pooled_rows = []
     if pooled is not None and d is not None:
         p0, p1 = float(d.loc[d.phil == 0, "cited"].mean()), float(d.loc[d.phil == 1, "cited"].mean())
-        extra = [(t, COVARIATE_LABELS[t][0].replace("Top author prestige", "All fields: top author prestige, 0 to 1")
+        extra = [(t, COVARIATE_LABELS[t][0].replace("Top author track record", "All fields: top author track record +10 pct. pts")
+                  .replace("No earlier papers", "All fields: no earlier papers")
                   .replace("Senior-author career length", "All fields: senior author prior works ×2.7"))
                  for t in PRESTIGE_DRIVERS if t in set(pooled.term)]
         for term, label in POOLED_ROWS + extra:
@@ -153,6 +156,9 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
             if hp.empty or mp.empty:
                 continue
             h, m = hp.iloc[0].copy(), mp.iloc[0].copy()
+            if term == "prestige_cnp":  # plotted per 10 percentile points so it does not stretch the axis
+                for r_ in (h, m):
+                    r_["coef"], r_["ci_low"], r_["ci_high"] = r_["coef"] / 10, r_["ci_low"] / 10, r_["ci_high"] / 10
             h["ctrl_share_cited"], h["phil_share_cited"] = p0, p1
             pooled_rows.append((label, h, m, term == "phil"))
     all_rows = rows + pooled_rows
@@ -201,7 +207,8 @@ COVARIATE_LABELS = {
     "year_dev": ("Publication year", "per year later than the set mean"),
     "nauth_dev": ("Number of authors", "per additional author"),
     "log_refs": ("Reference-list length", "per log unit of references"),
-    "prestige_max": ("Top author prestige", "0 → 1 percentile of the highest-ranked author"),
+    "prestige_cnp": ("Top author track record", "0 → 1 mean percentile of earlier papers"),
+    "no_prior_record": ("No earlier papers", "no author has a scored earlier paper"),
     "log_prior_works_max": ("Senior-author career length", "per log unit of prior works"),
 }
 

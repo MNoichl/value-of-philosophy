@@ -1,13 +1,15 @@
-"""Stage s08: coauthor prestige.
+"""Stage s08: author track record at publication time.
 
-For every author on every paper in the matched sets (s05), measure prestige at publication time as
-the all-time citations to the works that author published BEFORE the paper's year (so the paper
-itself and later work do not enter). That count is ranked as a percentile within the paper's field
-and publication year, among all authors appearing in the matched sets. Per paper we keep
-  prestige_max        highest percentile among all authors
-  prestige_max_nonphil highest percentile among authors who are not philosophers (s03)
-  n_prior_works_max   prior works of the most prolific author (a career-length proxy)
-Output: data/derived/s08/paper_prestige.parquet  (work_id, k-independent)
+For every author on every paper in the matched sets (s05), look only at the articles that author
+published BEFORE the paper's year. Main measure: the mean of those articles' OpenAlex
+citation_normalized_percentile, which is already normalised globally by field and year.
+Per paper we keep
+  prestige_cnp        highest mean percentile among the paper's authors (authors with >= 1 scored earlier paper)
+  prestige_cnp_min3   the same, counting only authors with >= 3 scored earlier papers (sensitivity, less noise)
+  prestige_max        highest within-sample percentile of earlier citations (the previous measure, for comparison)
+  n_prior_works_max   earlier works of the most prolific author
+Scores use today's citation counts for the earlier papers, so they are not fully time-safe.
+Output: data/derived/s08/paper_prestige.parquet (k-independent)
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ def _step(con, name, sql, path, t0):
     sys.stdout.flush()
 
 
-def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path) -> None:
+def run(cfg: Config, slim_dir: Path, s05_dir: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp = out_dir / "tmp"
     tmp.mkdir(exist_ok=True)
@@ -54,7 +56,7 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
     # 2. every work of every sample author: year and citations.
     #    Done one publication-year partition at a time: the unnest over the whole slim table does not
     #    fit in memory on the 31 GB box even when streamed, but each year partition does.
-    aw_dir = tmp / "author_works"
+    aw_dir = tmp / "author_works_cnp"
     aw_dir.mkdir(exist_ok=True)
     parts = sorted(p for p in slim_dir.iterdir() if p.name.startswith("publication_year="))
     for i, part in enumerate(parts):
@@ -64,7 +66,7 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
         con.execute(f"""
             COPY (
               WITH authors AS (SELECT DISTINCT author_id FROM read_parquet('{tmp / "paper_authors.parquet"}'))
-              SELECT u.author_id, w.work_id, w.publication_year, w.cited_by_count
+              SELECT u.author_id, w.work_id, w.publication_year, w.cited_by_count, w.cnp
               FROM read_parquet('{part}/*.parquet', hive_partitioning = true) w, UNNEST(w.author_ids) AS u(author_id)
               SEMI JOIN authors a ON u.author_id = a.author_id
               WHERE w.type = 'article' AND NOT coalesce(w.is_paratext, false) AND w.publication_year IS NOT NULL
@@ -81,7 +83,8 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
         WITH pa AS (SELECT * FROM read_parquet('{tmp / "paper_authors.parquet"}')),
         prior AS (
           SELECT pa.work_id, pa.author_id, pa.set_field, pa.publication_year,
-                 coalesce(sum(aw.cited_by_count), 0) AS prior_cites, count(aw.work_id) AS prior_works
+                 coalesce(sum(aw.cited_by_count), 0) AS prior_cites, count(aw.work_id) AS prior_works,
+                 avg(aw.cnp) AS mean_cnp, count(aw.cnp) AS n_scored
           FROM pa LEFT JOIN read_parquet('{aw_glob}') aw
             ON aw.author_id = pa.author_id AND aw.publication_year < pa.publication_year
           GROUP BY 1, 2, 3, 4)
@@ -90,19 +93,20 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s05_dir: Path, out_dir: Path
 
     # 4. paper-level maxima
     _step(con, "paper_prestige", f"""
-        WITH phil AS (SELECT author_id FROM read_parquet('{s03_dir / "philosophers.parquet"}')),
-        ap AS (SELECT a.*, (p.author_id IS NOT NULL) AS is_phil
-               FROM read_parquet('{tmp / "author_prestige.parquet"}') a LEFT JOIN phil p USING (author_id))
         SELECT work_id,
-               max(pct)                                         AS prestige_max,
-               max(CASE WHEN NOT is_phil THEN pct END)          AS prestige_max_nonphil,
-               max(prior_works)                                 AS n_prior_works_max,
-               max(prior_cites)                                 AS prior_cites_max
-        FROM ap GROUP BY work_id""", out_dir / "paper_prestige.parquet", t0)
+               max(mean_cnp)                                  AS prestige_cnp,
+               max(CASE WHEN n_scored >= 3 THEN mean_cnp END) AS prestige_cnp_min3,
+               max(pct)                                       AS prestige_max,
+               max(prior_works)                               AS n_prior_works_max,
+               max(prior_cites)                               AS prior_cites_max
+        FROM read_parquet('{tmp / "author_prestige.parquet"}') GROUP BY work_id""",
+        out_dir / "paper_prestige.parquet", t0)
+    dup = con.execute(f"""SELECT count(*) - (SELECT count(*) FROM (SELECT DISTINCT author_id, work_id
+                          FROM read_parquet('{aw_glob}'))) FROM read_parquet('{aw_glob}')""").fetchone()[0]
+    typer.echo(f"duplicate (author, work) rows in author_works: {dup:,}")
 
 
 def main(dev: bool = typer.Option(False)) -> None:
     cfg = load_config()
     d = "_dev" if dev else ""
-    run(cfg, cfg.derived / f"s02{d}" / "works_slim", cfg.derived / f"s03{d}", cfg.derived / f"s05{d}",
-        cfg.derived / f"s08{d}")
+    run(cfg, cfg.derived / f"s02{d}" / "works_slim", cfg.derived / f"s05{d}", cfg.derived / f"s08{d}")
