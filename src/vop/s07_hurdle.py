@@ -85,11 +85,22 @@ def by_field(d: pd.DataFrame, min_sets: int = 300) -> pd.DataFrame:
         except Exception as e:  # noqa: BLE001
             typer.echo(f"  {field}: skipped ({str(e)[:80]})")
             continue
+        ctrl = dd[dd.phil == 0]
+        p0 = float(ctrl["cited"].mean())                       # controls' share cited
+        med0 = float(ctrl.loc[ctrl.cited == 1, "cited_by_count"].median())  # controls' median cites | cited
         for part, mod in [("hurdle", h), ("lognormal", m)]:
             b, se = float(mod.coef()["phil"]), float(mod.se()["phil"])
             rows.append(dict(field=field, part=part, n_sets=n_sets, coef=b, se=se,
-                             ci_low=b - 1.96 * se, ci_high=b + 1.96 * se))
+                             ci_low=b - 1.96 * se, ci_high=b + 1.96 * se,
+                             ctrl_share_cited=p0, ctrl_median_cites_if_cited=med0,
+                             phil_share_cited=_shift_prob(p0, b) if part == "hurdle" else np.nan,
+                             phil_median_cites_if_cited=med0 * np.exp(b) if part == "lognormal" else np.nan))
     return pd.DataFrame(rows)
+
+
+def _shift_prob(p0: float, log_odds: float) -> float:
+    """Probability after adding `log_odds` to the baseline probability p0 on the logit scale."""
+    return float(1 / (1 + np.exp(-(np.log(p0 / (1 - p0)) + log_odds))))
 
 
 def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
@@ -98,13 +109,21 @@ def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
     import matplotlib.pyplot as plt
 
     order = (bf[bf.part == "hurdle"].sort_values("coef")["field"]).tolist()
-    fig, axes = plt.subplots(1, 2, figsize=(12, 0.38 * len(order) + 1.8), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 0.38 * len(order) + 1.8), sharey=True)
     titles = {"hurdle": "Hurdle: log-odds of any citation", "lognormal": "Log-normal: log citations given cited"}
     for ax, part in zip(axes, ["hurdle", "lognormal"]):
         sub = bf[bf.part == part].set_index("field").loc[order]
         y = np.arange(len(order))
         ax.errorbar(sub["coef"], y, xerr=[sub["coef"] - sub["ci_low"], sub["ci_high"] - sub["coef"]],
                     fmt="o", color="#eb6834", ecolor="#eb6834", capsize=3, markersize=6)
+        xmax = float(sub["ci_high"].max())
+        for yi, (_, r) in zip(y, sub.iterrows()):
+            if part == "hurdle":
+                txt = f"{r.ctrl_share_cited:.0%} → {r.phil_share_cited:.0%} cited"
+            else:
+                txt = f"×{np.exp(r.coef):.2f}: median {r.ctrl_median_cites_if_cited:.0f} → {r.phil_median_cites_if_cited:.1f}"
+            ax.text(xmax * 1.08, yi, txt, va="center", fontsize=8, color="#52514e")
+        ax.set_xlim(right=xmax * 1.9)
         ax.axvline(0, color="#52514e", linewidth=1)
         ax.set_title(titles[part], fontsize=11)
         ax.set_xlabel("philosopher coefficient (95% CI)")
@@ -113,7 +132,8 @@ def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
         ax.grid(axis="x", color="#e0dfdb", linewidth=0.8)
     axes[0].set_yticks(np.arange(len(order)), [f"{f}  (n={int(bf[bf.field == f].n_sets.iloc[0]):,})" for f in order])
     axes[0].invert_yaxis()
-    fig.suptitle("Philosopher effect within matched sets, by field of the focal paper (with covariates)", fontsize=12)
+    fig.suptitle("Philosopher effect within matched sets, by field of the focal paper (with covariates); "
+                 "annotations: controls → philosophers", fontsize=11)
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)

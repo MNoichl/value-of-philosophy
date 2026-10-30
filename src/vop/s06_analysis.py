@@ -127,26 +127,45 @@ def plot_distribution(df: pd.DataFrame, k: int, path: Path) -> None:
     plt.close(fig)
 
 
-def plot_coefficients(models: pd.DataFrame, path: Path) -> None:
+def plot_coefficients(models: pd.DataFrame, path: Path, df: pd.DataFrame | None = None) -> None:
     m = models.dropna(subset=["coef"]) if "coef" in models else models
     if m.empty:
         return
+    base = {}
+    if df is not None:
+        for k, d in df.groupby("k"):
+            c = d[~d["is_focal"]]
+            base[int(k)] = dict(mean=c["cited_by_count"].mean(), fwci=c["fwci"].mean(),
+                                win=c.loc[c["window_valid"], "cites_window"].mean())
     names = list(dict.fromkeys(m["model"]))
-    fig, ax = plt.subplots(figsize=(8, 0.6 * len(m) + 1.5))
+    fig, ax = plt.subplots(figsize=(10, 0.6 * len(m) + 1.5))
     y = 0
     ticks, labels = [], []
     for name in names:
         for _, r in m[m["model"] == name].iterrows():
             ax.errorbar(r["coef"], y, xerr=[[r["coef"] - r["ci_low"]], [r["ci_high"] - r["coef"]]],
                         fmt="o", color=COLORS["Philosopher"], ecolor=COLORS["Philosopher"], capsize=3, markersize=6)
+            b = base.get(int(r["k"]))
+            if b:
+                if "fwci" in name:
+                    txt = f"FWCI {b['fwci']:.2f} → {b['fwci'] + r['coef']:.2f}"
+                elif "window" in name:
+                    txt = f"mean {b['win']:.1f} → {b['win'] * np.exp(r['coef']):.1f} cites in {5} yrs"
+                elif "Poisson" in name:
+                    txt = f"mean {b['mean']:.1f} → {b['mean'] * np.exp(r['coef']):.1f} cites"
+                else:
+                    txt = f"×{np.exp(r['coef']):.3f} on (cites+1)"
+                ax.text(0.26, y, txt, va="center", fontsize=8, color="#52514e")
             ticks.append(y)
             labels.append(f"{name}, k=±{int(r['k'])}")
             y += 1
         y += 0.5
     ax.axvline(0, color="#52514e", linewidth=1)
+    ax.set_xlim(right=0.5)
     ax.set_yticks(ticks, labels)
     ax.invert_yaxis()
-    ax.set_xlabel("Coefficient on 'philosopher' within matched set (95% CI, SE clustered by set)")
+    ax.set_xlabel("Coefficient on 'philosopher' within matched set (95% CI, SE clustered by set); "
+                  "annotation: controls → philosophers")
     for s in ["top", "right"]:
         ax.spines[s].set_visible(False)
     ax.grid(axis="x", color="#e0dfdb", linewidth=0.8)
@@ -181,5 +200,5 @@ def main(dev: bool = typer.Option(False)) -> None:
     typer.echo(het.to_string(index=False))
 
     plot_distribution(df, k_main, reports / f"citations_boxplot_k{k_main}.png")
-    plot_coefficients(models, reports / "coefficients.png")
+    plot_coefficients(models, reports / "coefficients.png", df)
     typer.echo(f"figures -> {reports}")
