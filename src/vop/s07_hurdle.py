@@ -43,6 +43,7 @@ def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
         SELECT s.set_id, s.work_id, s.is_focal, s.publication_year, s.n_authors, s.cited_by_count,
                coalesce(s.referenced_works_count, 0) AS n_refs, f.set_field, f.set_domain
         FROM s JOIN f USING (set_id)
+        ORDER BY s.set_id, s.work_id  -- fixed order: LOO comparisons pair fits row by row
     """).fetchdf()
     d["phil"] = d["is_focal"].astype(int)
     d["cited"] = (d["cited_by_count"] > 0).astype(int)
