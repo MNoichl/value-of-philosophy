@@ -26,7 +26,9 @@ import pyfixest as pf  # noqa: E402
 
 from vop.config import Config, REPO_ROOT, connect, load_config  # noqa: E402
 
-COLORS = {"Control": "#2a78d6", "Philosopher": "#eb6834"}
+from vop.plotting import CTRL, INK, PHIL, title, use_opinionated  # noqa: E402
+
+COLORS = {"Control": CTRL, "Philosopher": PHIL}
 SNAPSHOT_YEAR = 2026
 CBY_FIRST_YEAR = 2012
 
@@ -109,7 +111,8 @@ def heterogeneity(df: pd.DataFrame, k: int) -> pd.DataFrame:
 
 def plot_distribution(df: pd.DataFrame, k: int, path: Path) -> None:
     d = df[df["k"] == k]
-    fig, ax = plt.subplots(figsize=(8, 3.2))
+    use_opinionated()
+    fig, ax = plt.subplots(figsize=(9, 3.6))
     for i, (label, sel) in enumerate([("Control", ~d["is_focal"]), ("Philosopher", d["is_focal"])]):
         x = d.loc[sel, "cited_by_count"].clip(lower=0) + 1
         ax.boxplot(x, positions=[i], vert=False, widths=0.5, whis=(5, 95), showfliers=False,
@@ -117,11 +120,8 @@ def plot_distribution(df: pd.DataFrame, k: int, path: Path) -> None:
                    capprops=dict(color=COLORS[label]), medianprops=dict(color=COLORS[label], linewidth=2))
     ax.set_xscale("log")
     ax.set_yticks([0, 1], ["Control", "Philosopher"])
-    ax.set_xlabel("Citations + 1 (log scale); box = IQR, whiskers = 5th–95th percentile")
-    ax.set_title(f"All-time citations, matched sets (k = ±{k})")
-    for s in ["top", "right"]:
-        ax.spines[s].set_visible(False)
-    ax.grid(axis="x", color="#e0dfdb", linewidth=0.8)
+    ax.set_xlabel("citations + 1 (log scale); box = IQR, whiskers = 5th–95th percentile")
+    ax.set_title(f"All-time citations, matched sets (k = ±{k})", loc="left")
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)
@@ -138,9 +138,12 @@ def plot_coefficients(models: pd.DataFrame, path: Path, df: pd.DataFrame | None 
             base[int(k)] = dict(mean=c["cited_by_count"].mean(), fwci=c["fwci"].mean(),
                                 win=c.loc[c["window_valid"], "cites_window"].mean())
     names = list(dict.fromkeys(m["model"]))
-    fig, ax = plt.subplots(figsize=(10, 0.6 * len(m) + 1.5))
+    use_opinionated()
+    fig, ax = plt.subplots(figsize=(11, 0.55 * len(m) + 2.8))
+    fig.subplots_adjust(top=1 - 2.0 / (0.55 * len(m) + 2.8), left=0.3, right=0.98, bottom=0.08)
     y = 0
     ticks, labels = [], []
+    ax.text(0.26, -0.9, "controls → philosophers", fontsize=10, color=INK, va="center", fontweight="bold")
     for name in names:
         for _, r in m[m["model"] == name].iterrows():
             ax.errorbar(r["coef"], y, xerr=[[r["coef"] - r["ci_low"]], [r["ci_high"] - r["coef"]]],
@@ -150,26 +153,24 @@ def plot_coefficients(models: pd.DataFrame, path: Path, df: pd.DataFrame | None 
                 if "fwci" in name:
                     txt = f"FWCI {b['fwci']:.2f} → {b['fwci'] + r['coef']:.2f}"
                 elif "window" in name:
-                    txt = f"mean {b['win']:.1f} → {b['win'] * np.exp(r['coef']):.1f} cites in {5} yrs"
+                    txt = f"{b['win']:.1f} → {b['win'] * np.exp(r['coef']):.1f} cites in 5 yrs ({np.exp(r['coef']) - 1:+.0%})"
                 elif "Poisson" in name:
-                    txt = f"mean {b['mean']:.1f} → {b['mean'] * np.exp(r['coef']):.1f} cites"
+                    txt = f"{b['mean']:.1f} → {b['mean'] * np.exp(r['coef']):.1f} cites ({np.exp(r['coef']) - 1:+.0%})"
                 else:
-                    txt = f"×{np.exp(r['coef']):.3f} on (cites+1)"
-                ax.text(0.26, y, txt, va="center", fontsize=8, color="#52514e")
+                    txt = f"{np.exp(r['coef']) - 1:+.1%} on cites+1"
+                ax.text(0.26, y, txt, va="center", fontsize=10, color=INK)
             ticks.append(y)
             labels.append(f"{name}, k=±{int(r['k'])}")
             y += 1
         y += 0.5
-    ax.axvline(0, color="#52514e", linewidth=1)
+    ax.axvline(0, color=INK, linewidth=1)
     ax.set_xlim(right=0.5)
+    ax.set_ylim(y - 0.5, -1.4)
     ax.set_yticks(ticks, labels)
-    ax.invert_yaxis()
-    ax.set_xlabel("Coefficient on 'philosopher' within matched set (95% CI, SE clustered by set); "
-                  "annotation: controls → philosophers")
-    for s in ["top", "right"]:
-        ax.spines[s].set_visible(False)
-    ax.grid(axis="x", color="#e0dfdb", linewidth=0.8)
-    fig.tight_layout()
+    ax.set_xlabel("coefficient on 'philosopher' within matched set (95% CI, SE clustered by set)")
+    ax.grid(axis="y", visible=False)
+    title(fig, "Philosophers' papers in other fields' journals: pooled effects",
+          "Each row is one model and matching radius; k = ±years and ±authors in the matched set.")
     fig.savefig(path, dpi=160)
     plt.close(fig)
 
