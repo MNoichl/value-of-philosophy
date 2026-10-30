@@ -29,7 +29,9 @@ import typer
 
 from vop.config import Config, connect, load_config
 
-DRIVERS = ["phil", "log_refs", "year_dev", "nauth_dev"]
+BASE_DRIVERS = ["phil", "log_refs", "year_dev", "nauth_dev"]
+PRESTIGE_DRIVERS = ["prestige_max_nonphil", "log_prior_works_max"]
+DRIVERS = list(BASE_DRIVERS)  # extended at runtime when s08 output exists
 
 
 def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
@@ -47,6 +49,16 @@ def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     d["log_refs"] = np.log1p(d["n_refs"])
     for col, new in [("publication_year", "year_dev"), ("n_authors", "nauth_dev")]:
         d[new] = d[col] - d.groupby("set_id")[col].transform("mean")
+    prestige = s05_dir.parent / "s08" / "paper_prestige.parquet"
+    if prestige.exists():
+        pr = con.execute(f"SELECT * FROM read_parquet('{prestige}')").fetchdf()
+        d = d.merge(pr, on="work_id", how="left")
+        d["prestige_max_nonphil"] = d["prestige_max_nonphil"].fillna(0.0)  # no non-philosopher coauthor
+        d["log_prior_works_max"] = np.log1p(d["n_prior_works_max"].fillna(0))
+        for c in PRESTIGE_DRIVERS:
+            if c not in DRIVERS:
+                DRIVERS.append(c)
+        typer.echo(f"prestige covariates attached ({len(pr):,} papers)")
     return d
 
 
