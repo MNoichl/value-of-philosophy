@@ -116,45 +116,80 @@ def _shift_prob(p0: float, log_odds: float) -> float:
     return float(1 / (1 + np.exp(-(np.log(p0 / (1 - p0)) + log_odds))))
 
 
-def plot_by_field(bf: pd.DataFrame, path: Path) -> None:
+POOLED_ROWS = [  # (term, label) rows added below the fields; from the pooled with-covariate models
+    ("phil", "All fields: philosopher"),
+    ("year_dev", "All fields: +1 year (within set)"),
+    ("nauth_dev", "All fields: +1 author"),
+    ("log_refs", "All fields: references ×2.7"),
+]
+
+
+def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = None, d: pd.DataFrame | None = None) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from vop.plotting import ARROW, INK, PHIL, annotate, title, use_opinionated
+    from vop.plotting import ARROW, CTRL, INK, PHIL, annotate, title, use_opinionated
 
     use_opinionated()
-    bf = bf[bf.term == "phil"]
-    order = (bf[bf.part == "hurdle"].sort_values("coef")["field"]).tolist()
-    n = len(order)
-    h = 0.42 * n + 2.4
-    fig, axes = plt.subplots(1, 2, figsize=(16, h), sharey=True)
-    fig.subplots_adjust(top=1 - 1.35 / h, wspace=0.06, left=0.3, right=0.985, bottom=0.9 / h)
+    fields = bf[(bf.term == "phil") & (bf.part == "hurdle")].sort_values("coef")["field"].tolist()
+    rows = []  # (label, hurdle row, lognormal row, is_phil)
+    for f in fields:
+        h = bf[(bf.field == f) & (bf.term == "phil") & (bf.part == "hurdle")].iloc[0]
+        m = bf[(bf.field == f) & (bf.term == "phil") & (bf.part == "lognormal")].iloc[0]
+        rows.append((f"{f}  (n={int(h.n_sets):,})", h, m, True))
+    pooled_rows = []
+    if pooled is not None and d is not None:
+        ctrl = d[d.phil == 0]
+        p0 = float(ctrl["cited"].mean())
+        extra = [(t, COVARIATE_LABELS[t][0].replace("Coauthor prestige", "All fields: coauthor prestige 0→1")
+                  .replace("Senior-author career length", "All fields: senior author prior works ×2.7"))
+                 for t in PRESTIGE_DRIVERS if t in set(pooled.term)]
+        for term, label in POOLED_ROWS + extra:
+            hp = pooled[(pooled.model.str.startswith("hurdle")) & pooled.model.str.contains("covariates") & (pooled.term == term)]
+            mp = pooled[(pooled.model.str.startswith("log-normal")) & pooled.model.str.contains("covariates") & (pooled.term == term)]
+            if hp.empty or mp.empty:
+                continue
+            h, m = hp.iloc[0].copy(), mp.iloc[0].copy()
+            h["ctrl_share_cited"], h["phil_share_cited"] = p0, _shift_prob(p0, float(h.coef))
+            pooled_rows.append((label, h, m, term == "phil"))
+    all_rows = rows + pooled_rows
+    n = len(all_rows)
+    gap = 0.6 if pooled_rows else 0.0
+    ys = [i + (gap if i >= len(rows) else 0.0) for i in range(n)]
+    h_in = 0.42 * n + 2.4 + gap * 0.42
+    fig, axes = plt.subplots(1, 2, figsize=(16, h_in), sharey=True)
+    fig.subplots_adjust(top=1 - 1.35 / h_in, wspace=0.06, left=0.3, right=0.985, bottom=0.9 / h_in)
     panels = {"hurdle": ("Cited at least once", f"controls {ARROW} philosophers"),
               "lognormal": ("Citations, if cited", "philosophers vs controls")}
-    y = np.arange(n)
-    for ax, part in zip(axes, ["hurdle", "lognormal"]):
-        sub = bf[bf.part == part].set_index("field").loc[order]
-        ax.errorbar(sub["coef"], y, xerr=[sub["coef"] - sub["ci_low"], sub["ci_high"] - sub["coef"]],
-                    fmt="o", color=PHIL, ecolor=PHIL, capsize=3, markersize=6, linewidth=1.5)
+    for ax, part, idx in zip(axes, ["hurdle", "lognormal"], [1, 2]):
+        recs = [r[idx] for r in all_rows]
+        cols = [PHIL if r[3] else CTRL for r in all_rows]
+        for yi, rec, c in zip(ys, recs, cols):
+            ax.errorbar(rec.coef, yi, xerr=[[rec.coef - rec.ci_low], [rec.ci_high - rec.coef]],
+                        fmt="o", color=c, ecolor=c, capsize=3, markersize=6, linewidth=1.5)
         ax.axvline(0, color=INK, linewidth=1)
         ax.set_title(panels[part][0], loc="left", fontsize=14)
-        ax.set_xlabel("philosopher coefficient (95% CI)")
-        xmax = float(sub["ci_high"].max())
+        ax.set_xlabel("coefficient (95% CI)")
+        xmax = max(float(r.ci_high) for r in recs)
         xa = xmax * 1.1
         annotate(ax, xa, -0.9, panels[part][1], fontsize=10, fontweight="bold")
-        for yi, (_, r) in zip(y, sub.iterrows()):
-            if part == "hurdle":
-                txt = f"{r.ctrl_share_cited:.0%} {ARROW} {r.phil_share_cited:.0%}"
+        for yi, rec, (_, _, _, is_phil) in zip(ys, recs, all_rows):
+            if part == "hurdle" and is_phil:
+                txt = f"{rec.ctrl_share_cited:.0%} {ARROW} {rec.phil_share_cited:.0%}"
+            elif part == "hurdle":
+                txt = f"odds {np.exp(rec.coef) - 1:+.0%}"
             else:
-                txt = f"{np.exp(r.coef) - 1:+.0%}"
+                txt = f"{np.exp(rec.coef) - 1:+.0%}"
             annotate(ax, xa, yi, txt, fontsize=10)
         ax.set_xlim(right=xmax * 1.75)
-        ax.set_ylim(n - 0.5, -1.4)
+        ax.set_ylim(ys[-1] + 0.5, -1.4)
         ax.grid(axis="y", visible=False)
-    axes[0].set_yticks(y, [f"{f}  (n={int(bf[bf.field == f].n_sets.iloc[0]):,})" for f in order])
+        if pooled_rows:
+            ax.axhline(len(rows) - 0.5 + gap / 2, color="#d0cfca", linewidth=1)
+    axes[0].set_yticks(ys, [r[0] for r in all_rows])
     title(fig, "Philosophers' papers in other fields' journals: effect by field",
-          "Within matched sets (same journal, ±3 years, ±3 authors), with covariates. "
-          "Left: share of papers cited at least once. Right: change in citations among cited papers.")
+          "Within matched sets (same journal, ±3 years, ±3 authors), with covariates. Orange: philosopher effect; "
+          "blue: covariate effects pooled over all fields, per unit.")
     fig.savefig(path, dpi=160)
     plt.close(fig)
 
@@ -181,7 +216,7 @@ def plot_covariates_by_field(bf: pd.DataFrame, path: Path) -> None:
     n = len(order)
     h = 2 * (0.3 * n + 1.2) + 1.6
     fig, axes = plt.subplots(2, len(terms), figsize=(4.2 * len(terms) + 3, h), sharey=True)
-    fig.subplots_adjust(top=1 - 1.3 / h, bottom=0.6 / h, left=0.22, right=0.985, wspace=0.08, hspace=0.25)
+    fig.subplots_adjust(top=1 - 1.3 / h, bottom=0.6 / h, left=0.25, right=0.985, wspace=0.08, hspace=0.25)
     y = np.arange(n)
     for j, term in enumerate(terms):
         for i, part in enumerate(["hurdle", "lognormal"]):
@@ -292,7 +327,7 @@ def main(
     bf.to_csv(out / f"hurdle_by_field_k{k}.csv", index=False)
     typer.echo(bf[bf.term == "phil"].round(3).to_string(index=False))
     from vop.config import REPO_ROOT
-    plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png")
+    plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
     plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
 
     if bayes:
