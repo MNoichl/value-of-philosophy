@@ -123,7 +123,12 @@ def build_bayesian(d: pd.DataFrame, with_drivers: bool) -> pm.Model:
     set_idx, sets = pd.factorize(d["set_id"])
     y = d["cited_by_count"].to_numpy().astype(float)
     X = d[DRIVERS].to_numpy() if with_drivers else d[["phil"]].to_numpy()
-    X = (X - X.mean(0)) / np.where(X.std(0) > 0, X.std(0), 1)  # standardised drivers; phil stays 0/1-ish
+    # standardise the continuous drivers only; keep phil as a 0/1 indicator so its coefficient is a log-odds /
+    # log-ratio directly comparable with the frequentist FE estimates
+    X = X.astype(float)
+    for j in range(1, X.shape[1]):
+        sd = X[:, j].std()
+        X[:, j] = (X[:, j] - X[:, j].mean()) / (sd if sd > 0 else 1)
     with pm.Model(coords={"set": sets, "driver": DRIVERS if with_drivers else ["phil"]}) as model:
         # hurdle (logit of P(cited))
         a_h = pm.Normal("a_h", 0, 1.5)
