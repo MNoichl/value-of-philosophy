@@ -134,7 +134,7 @@ def main(
 
     if bayes:
         if n_sets:
-            keep = pd.Series(d["set_id"].unique()).sample(n_sets, random_state=int(cfg.params["seed"]))
+            keep = pd.Series(sorted(d["set_id"].unique())).sample(n_sets, random_state=int(cfg.params["seed"]))
             d = d[d["set_id"].isin(keep)]
             typer.echo(f"Bayesian subsample: {len(d):,} rows, {n_sets} sets")
         summ = bayesian(d, out, draws, tune, chains)
