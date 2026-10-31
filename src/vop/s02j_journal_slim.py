@@ -30,6 +30,8 @@ def main() -> None:
     kept = 0
     for part in parts:
         meta = base / "s02b" / "works_meta" / part.name
+        if not meta.exists():  # s02b holds every article, so this year has none
+            continue
         (out / part.name).mkdir(exist_ok=True)
         target = out / part.name / "data_0.parquet"
         if target.exists():
