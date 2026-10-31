@@ -2,7 +2,9 @@
 
 For each focal work (s04) and each matching radius k = 1..max_year_diff, sample `controls_per_focal`
 control articles from the same source within +-k years and +-k authors, excluding anything with a
-philosopher author or that is itself a focal work.
+philosopher author or that is itself a focal work. With --by-field, controls must also share the focal
+work's OpenAlex field, so a social science paper in a general journal is compared with social science
+papers there. Focal works without a field then have no controls.
 
 Runs as a chain of materialised steps (each written to parquet) so every step streams and spills
 instead of holding the whole pipeline in memory. Writes
@@ -12,6 +14,7 @@ instead of holding the whole pipeline in memory. Writes
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import time
@@ -29,7 +32,7 @@ def _step(con, name: str, sql: str, path: Path, t0: float) -> None:
     sys.stdout.flush()
 
 
-def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path) -> None:
+def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path, by_field: bool = False) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp = out_dir / "tmp"
     if tmp.exists():
@@ -44,19 +47,21 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path
     philosophers = s03_dir / "philosophers.parquet"
 
     con = connect(cfg)
-    con.execute(f"SET threads = {min(cfg.threads, 4)}")
+    con.execute(f"SET threads = {min(int(os.environ.get('VOP_THREADS', cfg.threads)), 4)}")
     con.execute(f"SET enable_progress_bar = {str(sys.stdout.isatty()).lower()}")
     t0 = time.time()
+    field_col = ", field" if by_field else ""
+    field_join = "AND c.field = f.field" if by_field else ""
 
     # 1. focal works, slim
     _step(con, "focal", f"""
-        SELECT work_id, source_id, publication_year, coalesce(authors_count, n_authorships) AS n_authors
+        SELECT work_id, source_id, publication_year, coalesce(authors_count, n_authorships) AS n_authors{field_col}
         FROM read_parquet('{focal}')""", tmp / "focal.parquet", t0)
 
     # 2. candidate pool: articles in focal sources (streams over the slim table once)
     _step(con, "pool", f"""
         SELECT w.work_id, w.source_id, w.publication_year,
-               coalesce(w.authors_count, w.n_authorships) AS n_authors, w.author_ids
+               coalesce(w.authors_count, w.n_authorships) AS n_authors, w.author_ids{field_col}
         FROM read_parquet('{slim_glob}', hive_partitioning = true) w
         SEMI JOIN (SELECT DISTINCT source_id FROM read_parquet('{tmp / "focal.parquet"}')) f
           ON w.source_id = f.source_id
@@ -74,7 +79,7 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path
 
     # 4. eligible controls (no author_ids column from here on)
     _step(con, "eligible", f"""
-        SELECT pw.work_id, pw.source_id, pw.publication_year, pw.n_authors
+        SELECT pw.work_id, pw.source_id, pw.publication_year, pw.n_authors{field_col}
         FROM read_parquet('{tmp / "pool.parquet"}') pw
         ANTI JOIN read_parquet('{tmp / "pool_with_phil.parquet"}') x ON pw.work_id = x.work_id
         ANTI JOIN read_parquet('{tmp / "focal.parquet"}') f ON pw.work_id = f.work_id""",
@@ -82,8 +87,8 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path
 
     # 5. random cap per (source, year, n_authors) bucket so the pair join is bounded
     _step(con, "capped", f"""
-        SELECT work_id, source_id, publication_year, n_authors FROM (
-          SELECT *, row_number() OVER (PARTITION BY source_id, publication_year, n_authors
+        SELECT work_id, source_id, publication_year, n_authors{field_col} FROM (
+          SELECT *, row_number() OVER (PARTITION BY source_id, publication_year, n_authors{field_col}
                                        ORDER BY hash(work_id, {seed})) AS r
           FROM read_parquet('{tmp / "eligible.parquet"}')
         ) WHERE r <= {cap}""", tmp / "capped.parquet", t0)
@@ -98,7 +103,8 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path
         JOIN read_parquet('{tmp / "capped.parquet"}') c
           ON c.source_id = f.source_id
          AND c.publication_year BETWEEN f.publication_year - {max_k} AND f.publication_year + {max_k}
-         AND c.n_authors BETWEEN f.n_authors - {max_k} AND f.n_authors + {max_k}""",
+         AND c.n_authors BETWEEN f.n_authors - {max_k} AND f.n_authors + {max_k}
+         {field_join}""",
         tmp / "pairs.parquet", t0)
 
     # 7. sample m controls per (focal, k) for each nested radius k
@@ -147,8 +153,9 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path
     """).fetchdf().to_string(index=False))
 
 
-def main(dev: bool = typer.Option(False, help="Run on the dev outputs")) -> None:
+def main(dev: bool = typer.Option(False, help="Run on the dev outputs"),
+         by_field: bool = typer.Option(False, help="Controls must share the focal work's field")) -> None:
     cfg = load_config()
     d = "_dev" if dev else ""
     run(cfg, cfg.derived / f"s02{d}" / "works_slim", cfg.derived / f"s03{d}", cfg.derived / f"s04{d}",
-        cfg.derived / f"s05{d}")
+        cfg.derived / f"s05{d}", by_field)
