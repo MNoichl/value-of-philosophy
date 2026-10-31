@@ -39,27 +39,28 @@ def plot(fits: dict[str, xr.Dataset], out: Path) -> pd.DataFrame:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from vop.plotting import AQUA, CTRL, INK, PHIL, annotate, title, use_opinionated
+    from vop.plotting import AQUA, CTRL, INK, PHIL, title, use_opinionated
 
     use_opinionated()
     colors = dict(zip(fits, [CTRL, PHIL, AQUA]))
     fig = plt.figure(figsize=(16, 10.5))
-    gs = fig.add_gridspec(2, 6, top=0.87, bottom=0.08, left=0.04, right=0.985, hspace=0.34, wspace=0.5)
+    gs = fig.add_gridspec(2, 6, top=0.87, bottom=0.07, left=0.15, right=0.985, hspace=0.3, wspace=1.15)
     rows = []
     # philosopher effect in each process
     for spec, var, label, kind in [(gs[0, 0:3], "b_h", "Philosopher effect: cited at least once (log-odds)", "odds"),
                                    (gs[0, 3:6], "b_m", "Philosopher effect: log citations, if cited", "cites")]:
         ax = fig.add_subplot(spec)
-        for i, (name, ds) in enumerate(fits.items()):
+        for name, ds in fits.items():
             x = _flat(ds, var, "phil")
             lo, hi = np.percentile(x, [5.5, 94.5])
-            ax.hist(x, bins=50, density=True, histtype="stepfilled", alpha=0.3, color=colors[name], label=name)
-            ax.hist(x, bins=50, density=True, histtype="step", color=colors[name], linewidth=1.5)
             eff = f"odds x{np.exp(x.mean()):.2f}" if kind == "odds" else f"citations {np.exp(x.mean()) - 1:+.1%}"
-            annotate(ax, 0.985, 0.93 - 0.075 * i, f"{name}: {eff}", transform=ax.transAxes, ha="right", fontsize=10)
+            ax.hist(x, bins=50, density=True, histtype="stepfilled", alpha=0.3, color=colors[name], label=f"{name}: {eff}")
+            ax.hist(x, bins=50, density=True, histtype="step", color=colors[name], linewidth=1.5)
             rows.append(dict(fit=name, param=f"{var}[phil]", mean=x.mean(), sd=x.std(), eti89_lo=lo, eti89_hi=hi))
         ax.axvline(0, color=INK, linewidth=1)
         ax.set_title(label, loc="left", fontsize=13)
+        ax.set_ylim(top=ax.get_ylim()[1] * (1 + 0.12 * len(fits)))
+        ax.legend(frameon=False, fontsize=10, loc="upper center")
         ax.set_yticks([])
         ax.grid(axis="y", visible=False)
     # covariates, from the richest fit
@@ -93,7 +94,6 @@ def plot(fits: dict[str, xr.Dataset], out: Path) -> pd.DataFrame:
     ax.tick_params(axis="y", labelsize=10)
     ax.set_title("Differences between matched sets (sd)", loc="left", fontsize=13)
     ax.grid(axis="y", visible=False)
-    fig.axes[0].legend(frameon=False, fontsize=10, loc="upper left")
     title(fig, "Bayesian hurdle log-normal: posteriors",
           f"All matched sets, 500 draws x 4 chains, random effects per set in the hurdle, mean and spread. Intervals: 89%. Covariates from '{name}'.")
     fig.savefig(out, dpi=160)
