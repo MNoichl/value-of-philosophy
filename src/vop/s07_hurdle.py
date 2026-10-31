@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import pyfixest as pf
 import pymc as pm
+import pytensor.tensor as pt
 import typer
 
 from vop.config import REPO_ROOT, Config, connect, load_config
@@ -342,6 +343,22 @@ def _within_between(d: pd.DataFrame, cols: list[str], between: list[str], mask: 
     return within, b
 
 
+def _field_effects(name: str, mu, tau, n_sets: np.ndarray, min_centred: int = 300):
+    """Per-field effects: centred where the data are informative, non-centred where they are not.
+
+    Fields with many sets mix badly when non-centred, because the data pin down each effect. Fields with few
+    sets give a funnel when centred and the spread is small. Mixing the two avoids both problems.
+    """
+    big = np.flatnonzero(n_sets >= min_centred)
+    small = np.flatnonzero(n_sets < min_centred)
+    b = pt.zeros(len(n_sets))
+    if len(big):
+        b = pt.set_subtensor(b[big], pm.Normal(f"{name}_big", mu, tau, shape=len(big)))
+    if len(small):
+        b = pt.set_subtensor(b[small], mu + tau * pm.Normal(f"{name}_z", 0, 1, shape=len(small)))
+    return pm.Deterministic(name, b, dims="field")
+
+
 def build_field_model(d: pd.DataFrame, scales_path: Path, group: str) -> pm.Model:
     """Hurdle log-normal with a philosopher effect per field, partially pooled across fields.
 
@@ -357,6 +374,7 @@ def build_field_model(d: pd.DataFrame, scales_path: Path, group: str) -> pm.Mode
     d = d.reset_index(drop=True)
     set_idx, sets = pd.factorize(d["set_id"])
     field_idx, fields = pd.factorize(d[group], sort=True)
+    n_sets = d.groupby(field_idx)["set_id"].nunique().to_numpy()
     y = d["cited_by_count"].to_numpy().astype(float)
     drivers = [x for x in DRIVERS if x != "phil"]
     between = [x for x in BETWEEN_DRIVERS if x in drivers]
@@ -375,7 +393,7 @@ def build_field_model(d: pd.DataFrame, scales_path: Path, group: str) -> pm.Mode
         a_h = pm.Normal("a_h", 0, 1.5)
         mu_h = pm.Normal("mu_h", 0, 1)
         tau_h = pm.HalfNormal("tau_h", 0.5)
-        b_h_field = pm.Normal("b_h_field", mu_h, tau_h, dims="field")  # centred: most fields are well informed
+        b_h_field = _field_effects("b_h_field", mu_h, tau_h, n_sets)
         b_h = pm.Normal("b_h", 0, 1, dims="driver")
         bb_h = pm.Normal("b_h_between", 0, 1, dims="between")
         s_h = pm.HalfNormal("sd_set_h", 1)
@@ -384,7 +402,7 @@ def build_field_model(d: pd.DataFrame, scales_path: Path, group: str) -> pm.Mode
         a_m = pm.Normal("a_m", 1, 1.5)
         mu_m = pm.Normal("mu_m", 0, 1)
         tau_m = pm.HalfNormal("tau_m", 0.5)
-        b_m_field = pm.Normal("b_m_field", mu_m, tau_m, dims="field")
+        b_m_field = _field_effects("b_m_field", mu_m, tau_m, n_sets)
         b_m = pm.Normal("b_m", 0, 1, dims="driver")
         bb_m = pm.Normal("b_m_between", 0, 1, dims="between")
         s_m = pm.HalfNormal("sd_set_m", 1)
