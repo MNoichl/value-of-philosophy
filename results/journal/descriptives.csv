@@ -1,0 +1,7 @@
+k,group,n,mean_cites,median_cites,share_zero,mean_fwci,median_fwci
+1,Control,340953,18.417,1.0,0.447,2.487,0.0
+1,Philosopher,86033,17.012,1.0,0.431,2.429,0.0
+2,Control,344462,18.476,1.0,0.447,2.491,0.0
+2,Philosopher,86561,17.042,1.0,0.431,2.437,0.0
+3,Control,345855,18.903,1.0,0.449,2.488,0.0
+3,Philosopher,86779,17.097,1.0,0.431,2.447,0.0
