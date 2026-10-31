@@ -87,7 +87,7 @@ def main() -> None:
     a.set_xlabel("share of articles in philosophy sources", fontsize=11)
     a.set_ylabel("authors (log scale)", fontsize=11)
     a.set_title("Share of articles in philosophy", loc="left", fontsize=13)
-    a.legend(frameon=False, fontsize=10, title=None)
+    a.legend(frameon=False, fontsize=10, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.09))
 
     lt, lp, lo = np.log10(s.works_total + 1), np.log10(s.works_phil + 1), np.log10(s.works_out + 1)
     _hex(ax[0, 1], lp, lo, "articles in philosophy sources + 1", "articles elsewhere + 1", "Articles in and out")
