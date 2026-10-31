@@ -181,7 +181,7 @@ def main(dev: bool = typer.Option(False)) -> None:
     d = "_dev" if dev else ""
     out = cfg.derived / f"s06{d}"
     out.mkdir(parents=True, exist_ok=True)
-    reports = REPO_ROOT / "reports"
+    reports = cfg.reports
     reports.mkdir(exist_ok=True)
     window = int(cfg.params.get("citation_window_years", 5))
 

@@ -37,11 +37,14 @@ DRIVERS = list(BASE_DRIVERS)  # extended at runtime when s08 output exists
 
 def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     con = connect(cfg)
+    sets_path = s05_dir / "matched_sets.parquet"
+    cols = set(con.execute(f"DESCRIBE SELECT * FROM read_parquet('{sets_path}')").fetchdf().column_name)
+    meta = ", s.has_abstract, s.n_pages" if "has_abstract" in cols else ""
     d = con.execute(f"""
         WITH s AS (SELECT * FROM read_parquet('{s05_dir / "matched_sets.parquet"}') WHERE k = {k}),
              f AS (SELECT set_id, field AS set_field, domain AS set_domain FROM s WHERE is_focal)
         SELECT s.set_id, s.work_id, s.is_focal, s.publication_year, s.n_authors, s.cited_by_count,
-               coalesce(s.referenced_works_count, 0) AS n_refs, f.set_field, f.set_domain
+               coalesce(s.referenced_works_count, 0) AS n_refs, f.set_field, f.set_domain{meta}
         FROM s JOIN f USING (set_id)
         ORDER BY s.set_id, s.work_id  -- fixed order: LOO comparisons pair fits row by row
     """).fetchdf()
@@ -51,6 +54,10 @@ def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     d["log_refs"] = np.log1p(d["n_refs"])
     for col, new in [("publication_year", "year_dev"), ("n_authors", "nauth_dev")]:
         d[new] = d[col] - d.groupby("set_id")[col].transform("mean")
+    if meta:
+        d["has_abstract"] = d["has_abstract"].fillna(False).astype(int)
+        if "has_abstract" not in DRIVERS:
+            DRIVERS.append("has_abstract")
     prestige = s05_dir.parent / "s08" / "paper_prestige.parquet"
     if prestige.exists():
         pr = con.execute(f"SELECT * FROM read_parquet('{prestige}')").fetchdf()
@@ -150,8 +157,9 @@ def plot_by_field(bf: pd.DataFrame, path: Path, pooled: pd.DataFrame | None = No
         p0, p1 = float(d.loc[d.phil == 0, "cited"].mean()), float(d.loc[d.phil == 1, "cited"].mean())
         extra = [(t, COVARIATE_LABELS[t][0].replace("Top author track record", "All fields: top author track record +10 pct. pts")
                   .replace("No earlier papers", "All fields: no earlier papers")
+                  .replace("Abstract available", "All fields: abstract available")
                   .replace("Senior-author career length", "All fields: senior author prior works ×2.7"))
-                 for t in PRESTIGE_DRIVERS if t in set(pooled.term)]
+                 for t in PRESTIGE_DRIVERS + ["has_abstract"] if t in set(pooled.term)]
         for term, label in POOLED_ROWS + extra:
             hp = pooled[(pooled.model.str.startswith("hurdle")) & pooled.model.str.contains("covariates") & (pooled.term == term)]
             mp = pooled[(pooled.model.str.startswith("log-normal")) & pooled.model.str.contains("covariates") & (pooled.term == term)]
@@ -211,6 +219,7 @@ COVARIATE_LABELS = {
     "log_refs": ("Reference-list length", "per log unit of references"),
     "prestige_cnp": ("Top author track record", "0 → 1 mean percentile of earlier papers"),
     "no_prior_record": ("No earlier papers", "no author has a scored earlier paper"),
+    "has_abstract": ("Abstract available", "abstract recorded vs none"),
     "log_prior_works_max": ("Senior-author career length", "per log unit of prior works"),
 }
 
@@ -296,7 +305,7 @@ def build_bayesian(d: pd.DataFrame, drivers: list[str]) -> pm.Model:
 def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int, loglik: bool = True,
              fit: tuple[str, ...] = ("with_track",)) -> pd.DataFrame:
     """Fit the named models. LOO is left to `vop s07-loo`, which works in chunks from the saved files."""
-    specs = {"phil_only": ["phil"], "with_drivers": BASE_DRIVERS, "with_track": BASE_DRIVERS + PRESTIGE_DRIVERS}
+    specs = {"phil_only": ["phil"], "with_drivers": BASE_DRIVERS, "with_track": list(DRIVERS)}
     rows = []
     for label in fit:
         model = build_bayesian(d, specs[label])
@@ -331,14 +340,15 @@ def main(
     sfx = "_dev" if dev else ""
     out = cfg.derived / f"s07{sfx}"
     out.mkdir(parents=True, exist_ok=True)
+    cfg.reports.mkdir(parents=True, exist_ok=True)
     d = load(cfg, cfg.derived / f"s05{sfx}", k)
     typer.echo(f"k={k}: {len(d):,} rows, {d.set_id.nunique():,} sets, share cited {d.cited.mean():.3f}")
 
     if plot_only:
         freq = pd.read_csv(out / f"hurdle_frequentist_k{k}.csv")
         bf = pd.read_csv(out / f"hurdle_by_field_k{k}.csv")
-        plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
-        plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
+        plot_by_field(bf, cfg.reports / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
+        plot_covariates_by_field(bf, cfg.reports / f"covariates_by_field_k{k}.png")
         typer.echo("figures redrawn from saved tables")
         return
 
@@ -354,8 +364,8 @@ def main(
     bf = by_field(d)
     bf.to_csv(out / f"hurdle_by_field_k{k}.csv", index=False)
     typer.echo(bf[bf.term == "phil"].round(3).to_string(index=False))
-    plot_by_field(bf, REPO_ROOT / "reports" / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
-    plot_covariates_by_field(bf, REPO_ROOT / "reports" / f"covariates_by_field_k{k}.png")
+    plot_by_field(bf, cfg.reports / f"hurdle_by_field_k{k}.png", pooled=freq, d=d)
+    plot_covariates_by_field(bf, cfg.reports / f"covariates_by_field_k{k}.png")
 
     if bayes:
         if n_sets:

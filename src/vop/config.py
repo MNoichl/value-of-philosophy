@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,8 +24,17 @@ class Config:
     params: dict
 
     @property
+    def variant(self) -> str:
+        """Set VOP_VARIANT to keep a parallel pipeline in derived_<variant>/ and reports/<variant>/."""
+        return os.environ.get("VOP_VARIANT", "")
+
+    @property
     def derived(self) -> Path:
-        return self.data_root / "derived"
+        return self.data_root / (f"derived_{self.variant}" if self.variant else "derived")
+
+    @property
+    def reports(self) -> Path:
+        return REPO_ROOT / "reports" / self.variant if self.variant else REPO_ROOT / "reports"
 
 
 def load_config(path: Path = CONFIG_PATH) -> Config:
@@ -46,8 +56,8 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
 def connect(cfg: Config, database: str | Path = ":memory:") -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(str(database))
     cfg.temp_directory.mkdir(parents=True, exist_ok=True)
-    con.execute(f"SET threads = {cfg.threads}")
-    con.execute(f"SET memory_limit = '{cfg.memory_limit}'")
+    con.execute(f"SET threads = {os.environ.get('VOP_THREADS', cfg.threads)}")
+    con.execute(f"SET memory_limit = '{os.environ.get('VOP_MEMORY', cfg.memory_limit)}'")
     con.execute(f"SET temp_directory = '{cfg.temp_directory}'")
     con.execute("SET preserve_insertion_order = false")
     return con

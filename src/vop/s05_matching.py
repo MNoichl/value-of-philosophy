@@ -114,6 +114,9 @@ def run(cfg: Config, slim_dir: Path, s03_dir: Path, s04_dir: Path, out_dir: Path
     # 8. long table of focal + control rows with the slim columns
     cols = ("work_id, publication_year, source_id, issn_l, coalesce(authors_count, n_authorships) AS n_authors, "
             "cited_by_count, counts_by_year, referenced_works_count, fwci, cnp, subfield, field, domain")
+    slim_cols = set(con.execute(f"DESCRIBE SELECT * FROM read_parquet('{slim_glob}', hive_partitioning = true)").fetchdf().column_name)
+    if "has_abstract" in slim_cols:
+        cols += ", has_abstract, n_pages"
     sets = out_dir / "matched_sets.parquet"
     _step(con, "matched_sets", f"""
         WITH ids AS (SELECT DISTINCT control_id AS work_id FROM read_parquet('{links}')

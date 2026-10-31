@@ -80,7 +80,8 @@ def main(k: int = typer.Option(3), dev: bool = typer.Option(False)) -> None:
             typer.echo(f"loaded {f.name} as '{label}'")
     if not fits:
         raise typer.Exit("no posterior files found")
-    out = REPO_ROOT / "reports" / f"bayes_posteriors_k{k}.png"
+    cfg.reports.mkdir(parents=True, exist_ok=True)
+    out = cfg.reports / f"bayes_posteriors_k{k}.png"
     summ = plot(fits, out)
     summ.to_csv(d / "bayes_posterior_summary.csv", index=False)
     typer.echo(summ.round(3).to_string(index=False))
