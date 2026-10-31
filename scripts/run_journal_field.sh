@@ -7,7 +7,7 @@ B=/data/openalex_project_storage/vop/derived_journal
 D=/data/openalex_project_storage/vop/derived_journal_field; L=$D/logs; mkdir -p "$L"
 for s in s01 s02 s03 s04; do ln -sfn "$B/$s" "$D/$s"; done
 vop() { uv run --no-sync vop "$@"; }
-VOP_MEMORY=5GB VOP_THREADS=2 vop s05-matching --by-field > "$L/s05.log" 2>&1
+vop s05-matching --by-field > "$L/s05.log" 2>&1
 until [ -f "$B/logs/field_within_done" ]; do sleep 60; done  # the running fit needs the memory
 vop s08-prestige > "$L/s08.log" 2>&1
 PYTHONPATH=src .venv/bin/python scripts/diagnostics/field_matched_compare.py > "$L/compare.log" 2>&1
