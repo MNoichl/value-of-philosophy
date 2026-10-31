@@ -19,6 +19,7 @@ ARROW = "\u2192"  # rendered with the fallback font (Roboto Condensed has no arr
 PHIL = "#eb6834"
 CTRL = "#2a78d6"
 INK = "#52514e"
+AQUA = "#1baf7a"
 
 
 def use_opinionated(style: str = "opinionated_rc") -> None:
