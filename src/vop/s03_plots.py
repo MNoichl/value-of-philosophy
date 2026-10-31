@@ -86,7 +86,7 @@ def main() -> None:
     a.axvline(0.5, color=INK, linewidth=1, linestyle="--")
     a.set_xlabel("share of articles in philosophy sources", fontsize=11)
     a.set_ylabel("authors (log scale)", fontsize=11)
-    a.set_title("Share of articles in philosophy", loc="left", fontsize=13)
+    a.set_title("Share of articles in philosophy", loc="left", fontsize=13, pad=24)
     a.legend(frameon=False, fontsize=10, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.09))
 
     lt, lp, lo = np.log10(s.works_total + 1), np.log10(s.works_phil + 1), np.log10(s.works_out + 1)
