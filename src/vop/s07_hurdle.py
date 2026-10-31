@@ -343,7 +343,7 @@ def _within_between(d: pd.DataFrame, cols: list[str], between: list[str], mask: 
     return within, b
 
 
-def _field_effects(name: str, mu, tau, n_sets: np.ndarray, min_centred: int = 300):
+def _field_effects(name: str, mu, tau, n_sets: np.ndarray, min_centred: int = 1000):
     """Per-field effects: centred where the data are informative, non-centred where they are not.
 
     Fields with many sets mix badly when non-centred, because the data pin down each effect. Fields with few
