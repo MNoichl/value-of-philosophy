@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import gc
+import json
 import arviz as az
 import numpy as np
 import pandas as pd
@@ -302,19 +303,80 @@ def build_bayesian(d: pd.DataFrame, drivers: list[str]) -> pm.Model:
     return model
 
 
+NO_FIELD = "No field assigned"
+
+
+def build_field_model(d: pd.DataFrame, scales_path: Path) -> pm.Model:
+    """Hurdle log-normal with a philosopher effect per field, partially pooled across fields.
+
+    logit P(cited)       = a_h + b_h_field[field] * phil + covariates + set effect
+    mean of log(cites)   = a_m + b_m_field[field] * phil + covariates + set effect
+    log sigma            = a_s + set effect
+    The field of a set is the field of its philosopher paper. Field alone is absorbed by the set effects,
+    but philosopher x field varies within sets, so it is identified.
+    """
+    set_idx, sets = pd.factorize(d["set_id"])
+    field_idx, fields = pd.factorize(d["set_field"].fillna(NO_FIELD), sort=True)
+    y = d["cited_by_count"].to_numpy().astype(float)
+    phil = d["phil"].to_numpy().astype(float)
+    drivers = [x for x in DRIVERS if x != "phil"]
+    X = d[drivers].to_numpy().astype(float)
+    scales = {}
+    for j, name in enumerate(drivers):
+        if set(np.unique(X[:, j])) <= {0.0, 1.0}:
+            scales[name] = {"mean": 0.0, "sd": 1.0}
+            continue
+        m, sd = float(X[:, j].mean()), float(X[:, j].std())
+        scales[name] = {"mean": m, "sd": sd}
+        X[:, j] = (X[:, j] - m) / (sd if sd > 0 else 1)
+    scales_path.write_text(json.dumps(scales, indent=1))
+    with pm.Model(coords={"set": sets, "driver": drivers, "field": list(fields)}) as model:
+        a_h = pm.Normal("a_h", 0, 1.5)
+        mu_h = pm.Normal("mu_h", 0, 1)
+        tau_h = pm.HalfNormal("tau_h", 0.5)
+        zf_h = pm.Normal("zf_h", 0, 1, dims="field")
+        b_h_field = pm.Deterministic("b_h_field", mu_h + tau_h * zf_h, dims="field")
+        b_h = pm.Normal("b_h", 0, 1, dims="driver")
+        s_h = pm.HalfNormal("sd_set_h", 1)
+        z_h = pm.Normal("z_h", 0, 1, dims="set")
+        psi = pm.math.sigmoid(a_h + b_h_field[field_idx] * phil + X @ b_h + s_h * z_h[set_idx])
+        a_m = pm.Normal("a_m", 1, 1.5)
+        mu_m = pm.Normal("mu_m", 0, 1)
+        tau_m = pm.HalfNormal("tau_m", 0.5)
+        zf_m = pm.Normal("zf_m", 0, 1, dims="field")
+        b_m_field = pm.Deterministic("b_m_field", mu_m + tau_m * zf_m, dims="field")
+        b_m = pm.Normal("b_m", 0, 1, dims="driver")
+        s_m = pm.HalfNormal("sd_set_m", 1)
+        z_m = pm.Normal("z_m", 0, 1, dims="set")
+        mu = a_m + b_m_field[field_idx] * phil + X @ b_m + s_m * z_m[set_idx]
+        a_s = pm.Normal("a_s", 0, 1)
+        s_s = pm.HalfNormal("sd_set_s", 0.5)
+        z_s = pm.Normal("z_s", 0, 1, dims="set")
+        sigma = pm.math.exp(a_s + s_s * z_s[set_idx])
+        pm.HurdleLogNormal("y", psi=psi, mu=mu, sigma=sigma, observed=y)
+    return model
+
+
 def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int, loglik: bool = True,
              fit: tuple[str, ...] = ("with_track",)) -> pd.DataFrame:
     """Fit the named models. LOO is left to `vop s07-loo`, which works in chunks from the saved files."""
     specs = {"phil_only": ["phil"], "with_drivers": BASE_DRIVERS, "with_track": list(DRIVERS)}
     rows = []
     for label in fit:
-        model = build_bayesian(d, specs[label])
+        n_ = d.set_id.nunique()
+        if label == "field_phil":
+            model = build_field_model(d, out / f"hurdle_{label}_n{n_}.scales.json")
+            names = ["a_h", "mu_h", "tau_h", "b_h_field", "b_h", "a_m", "mu_m", "tau_m", "b_m_field", "b_m", "a_s",
+                     "sd_set_h", "sd_set_m", "sd_set_s"]
+        else:
+            model = build_bayesian(d, specs[label])
+            names = ["a_h", "b_h", "a_m", "b_m", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"]
         with model:
             idata = pm.sample(draws=draws, tune=tune, chains=chains, nuts_sampler="nutpie",
                               idata_kwargs={"log_likelihood": loglik}, progressbar=False)
         idata.to_netcdf(out / f"hurdle_{label}_n{d.set_id.nunique()}.nc")
         typer.echo(f"[{label}] sampled {d.set_id.nunique()} sets", err=False)
-        summ = az.summary(idata, var_names=["a_h", "b_h", "a_m", "b_m", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"])
+        summ = az.summary(idata, var_names=names)
         summ.insert(0, "model", label)
         typer.echo(f"[{label}] divergences: {int(idata.sample_stats['diverging'].sum())}")
         typer.echo(summ.round(3).to_string())
@@ -353,6 +415,9 @@ def main(
         return
 
     if bayes_only:
+        if n_sets:
+            keep = pd.Series(sorted(d["set_id"].unique())).sample(n_sets, random_state=int(cfg.params["seed"]))
+            d = d[d["set_id"].isin(keep)]
         summ = bayesian(d, out, draws, tune, chains, loglik, tuple(fit.split(",")))
         summ.to_csv(out / f"hurdle_bayesian_k{k}_{fit.replace(',', '_')}.csv", index=False)
         return
