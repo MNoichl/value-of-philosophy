@@ -1,0 +1,41 @@
+prestige covariates attached (616,110 papers)
+                                                 FE  RE_no_field  RE_field  RE_field_means  RE_centred_means  bayes  n_sets  ctrl_logcites
+field                                                                                                                                     
+Social Sciences                               0.020        0.008     0.008           0.009             0.020  0.002   29492          1.898
+Arts and Humanities                          -0.080       -0.133    -0.088          -0.088            -0.080 -0.143   19035          1.458
+Psychology                                    0.088       -0.022     0.080           0.069             0.087 -0.016    9405          1.946
+Medicine                                     -0.031        0.014    -0.043          -0.048            -0.032  0.026    6777          2.433
+Computer Science                              0.032       -0.015     0.020           0.019             0.033 -0.010    4586          2.131
+Mathematics                                  -0.105       -0.126    -0.109          -0.108            -0.106 -0.123    2893          1.981
+Neuroscience                                  0.107        0.122     0.119           0.102             0.106  0.127    2246          2.584
+Decision Sciences                             0.046        0.075     0.032           0.044             0.046  0.077    1536          2.435
+Economics, Econometrics and Finance          -0.125       -0.031    -0.138          -0.138            -0.125 -0.029    1522          2.404
+Business, Management and Accounting           0.067        0.265     0.065           0.066             0.070  0.247    1400          2.740
+Physics and Astronomy                         0.143        0.156     0.157           0.150             0.141  0.140    1384          2.191
+Health Professions                            0.066        0.048     0.037           0.041             0.067  0.061    1364          2.365
+Environmental Science                         0.014        0.091    -0.006          -0.004             0.015  0.092    1338          2.505
+No field assigned                            -0.751       -0.782    -0.807          -0.730            -0.750 -0.555    1115          1.864
+Engineering                                  -0.036        0.024    -0.028          -0.037            -0.034  0.016     807          2.334
+Biochemistry, Genetics and Molecular Biology  0.040        0.232     0.043           0.047             0.040  0.199     696          3.102
+Agricultural and Biological Sciences          0.014        0.096     0.006           0.009             0.016  0.064     381          2.570
+Earth and Planetary Sciences                 -0.194        0.013    -0.144          -0.161            -0.188  0.018     153          2.722
+Pharmacology, Toxicology and Pharmaceutics   -0.084        0.009    -0.102          -0.100            -0.086  0.049     144          2.539
+Veterinary                                   -0.107       -0.045    -0.113          -0.117            -0.110 -0.004     110          2.571
+Chemistry                                     0.063        0.208     0.075           0.066             0.063  0.133     108          2.526
+Nursing                                       0.034        0.216     0.065           0.084             0.033  0.142      85          2.607
+Materials Science                            -0.311       -0.175    -0.288          -0.289            -0.307 -0.081      68          2.712
+Immunology and Microbiology                   0.124        0.302     0.126           0.120             0.130  0.150      44          3.056
+Energy                                       -0.216        0.008    -0.121          -0.146            -0.216  0.009      37          2.571
+Dentistry                                    -0.598       -0.677    -0.568          -0.546            -0.592 -0.205      29          2.131
+Chemical Engineering                          0.034        0.178    -0.045          -0.097             0.036  0.038      24          2.974
+fields with >=300 sets: 16
+RE_no_field corr(gap from FE, control mean log cites)= 0.82 mean abs gap 0.066
+RE_field corr(gap from FE, control mean log cites)= 0.14 mean abs gap 0.011
+RE_field_means corr(gap from FE, control mean log cites)= 0.29 mean abs gap 0.01
+RE_centred_means corr(gap from FE, control mean log cites)= 0.22 mean abs gap 0.001
+bayes corr(gap from FE, control mean log cites)= 0.84 mean abs gap 0.061
+covariates has_abstract / prestige with field and means: 0.4 0.891
+hurdle corr(bayes, ctrl baseline)= 0.79 corr(gap, ctrl baseline)= 0.67 corr(FE, baseline)= 0.33
+corr(bayes_m gap...) done; weighted FE mean log cites 0.0005
+DONE
+EXIT=0

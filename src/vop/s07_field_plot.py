@@ -1,4 +1,4 @@
-"""Philosopher effect by field from the Bayesian field model (`vop s07-hurdle --bayes-only --fit field_phil`).
+"""Philosopher effect by field from a Bayesian field model (`vop s07-hurdle --bayes-only --fit journal_within`).
 
 Same layout as the fixed-effects field figure. Also writes the field table and all pairwise field
 differences with 89% intervals and the posterior probability that the difference is above zero.
@@ -39,10 +39,11 @@ def _iv(x: np.ndarray) -> tuple[float, float, float]:
     return float(x.mean()), float(lo), float(hi)
 
 
-def main(k: int = typer.Option(3)) -> None:
+def main(k: int = typer.Option(3), fit: str = typer.Option("journal_within", help="journal_within or field_within")) -> None:
     cfg = load_config()
     s07 = cfg.derived / "s07"
-    fits = sorted(s07.glob("hurdle_field_phil_n*.nc"), key=lambda p: int(p.stem.split("_n")[-1]))
+    group, wording = h.FIELD_FITS[fit]
+    fits = sorted(s07.glob(f"hurdle_{fit}_n*.nc"), key=lambda p: int(p.stem.split("_n")[-1]))
     if not fits:
         raise typer.Exit("no field model found")
     path = fits[-1]
@@ -55,9 +56,11 @@ def main(k: int = typer.Option(3)) -> None:
     M = p["b_m_field"].values.reshape(-1, len(fields))
 
     d = h.load(cfg, cfg.derived / "s05", k)
-    d["field_g"] = d["set_field"].fillna(h.NO_FIELD)
-    obs = d.groupby(["field_g", "phil"])["cited"].mean().unstack()
-    n_sets = d.groupby("field_g")["set_id"].nunique()
+    if group == "j_field":
+        d = h.attach_journal_field(cfg, d)
+    d = d[d[group].notna()]
+    obs = d.groupby([group, "phil"])["cited"].mean().unstack()
+    n_sets = d.groupby(group)["set_id"].nunique()
     rows = []
     for i, f in enumerate(fields):
         hm, hl, hh = _iv(H[:, i])
@@ -66,23 +69,25 @@ def main(k: int = typer.Option(3)) -> None:
                          h_mean=hm, h_lo=hl, h_hi=hh, odds_ratio=np.exp(hm), m_mean=mm, m_lo=ml, m_hi=mh, cites_pct=np.exp(mm) - 1,
                          p_h_pos=(H[:, i] > 0).mean(), p_m_pos=(M[:, i] > 0).mean()))
     t = pd.DataFrame(rows).sort_values("h_mean").reset_index(drop=True)
-    t.to_csv(s07 / f"field_model_effects_k{k}.csv", index=False)
+    t.to_csv(s07 / f"{fit}_effects_k{k}.csv", index=False)
     pairs = []
     for a, b in itertools.combinations(range(len(fields)), 2):
         for part, Z in [("hurdle", H), ("lognormal", M)]:
             dx = Z[:, a] - Z[:, b]
             mn, lo, hi = _iv(dx)
             pairs.append(dict(part=part, field_a=fields[a], field_b=fields[b], diff=mn, lo=lo, hi=hi, p_a_gt_b=(dx > 0).mean()))
-    pd.DataFrame(pairs).to_csv(s07 / f"field_model_differences_k{k}.csv", index=False)
+    pd.DataFrame(pairs).to_csv(s07 / f"{fit}_differences_k{k}.csv", index=False)
 
     tau_h, tau_m = _iv(p["tau_h"].values.ravel()), _iv(p["tau_m"].values.ravel())
     p0, p1 = float(d.loc[d.phil == 0, "cited"].mean()), float(d.loc[d.phil == 1, "cited"].mean())
-    block = [("All fields: philosopher", _iv(p["mu_h"].values.ravel()), _iv(p["mu_m"].values.ravel()), True)]
+    w = np.array([n_sets.get(f, 0) for f in fields], dtype=float)
+    w /= w.sum()  # overall effect weighted by sets, unlike mu, which counts every field equally
+    block = [("All fields: philosopher, weighted by sets", _iv(H @ w), _iv(M @ w), True)]
     for drv in [str(v) for v in p["driver"].values]:
         label, mult = UNITS.get(drv, (drv, 1.0))
         c = mult / scales[drv]["sd"]
         block.append((label, _iv(p["b_h"].sel(driver=drv).values.ravel() * c), _iv(p["b_m"].sel(driver=drv).values.ravel() * c), False))
-    pd.DataFrame([dict(row=b[0], h_mean=b[1][0], h_lo=b[1][1], h_hi=b[1][2], m_mean=b[2][0], m_lo=b[2][1], m_hi=b[2][2]) for b in block]).to_csv(s07 / f"field_model_pooled_k{k}.csv", index=False)
+    pd.DataFrame([dict(row=b[0], h_mean=b[1][0], h_lo=b[1][1], h_hi=b[1][2], m_mean=b[2][0], m_lo=b[2][1], m_hi=b[2][2]) for b in block]).to_csv(s07 / f"{fit}_pooled_k{k}.csv", index=False)
 
     use_opinionated()
     n = len(t) + len(block)
@@ -117,11 +122,11 @@ def main(k: int = typer.Option(3)) -> None:
         ax.grid(axis="y", visible=False)
     labels = [f"{r.field}  (n={r.n_sets:,})" for r in t.itertuples()] + [b[0] for b in block]
     axes[0].set_yticks(ys, labels)
-    title(fig, "Philosophers' papers in other fields' journals: Bayesian field model",
-          f"One model, philosopher effect per field, partially pooled. Spread across fields: {tau_h[0]:.2f} on log-odds, {tau_m[0]:.2f} on log citations. "
+    title(fig, f"Philosopher effect by {wording}: Bayesian model",
+          f"Within matched sets, partially pooled across fields. Spread across fields: {tau_h[0]:.2f} on log-odds, {tau_m[0]:.2f} on log citations. "
           "Left labels: raw observed shares.")
     cfg.reports.mkdir(parents=True, exist_ok=True)
-    out = cfg.reports / f"hurdle_field_bayes_k{k}.png"
+    out = cfg.reports / f"hurdle_{fit}_bayes_k{k}.png"
     fig.savefig(out, dpi=160)
     plt.close(fig)
     typer.echo(t.round(3).to_string(index=False))

@@ -8,7 +8,8 @@ citations it accumulates (log-normal). Two tiers:
   bayesian     PyMC HurdleLogNormal mirroring brms::hurdle_lognormal: random intercepts per matched
                set in the hurdle, in mu, and in sigma (non-centred), same drivers in hurdle and mu.
                Sampled with nutpie (NUTS). PSIS-LOO via ArviZ, with and without the drivers, so the
-               model comparison in the brms write-up can be reproduced.
+               model comparison in the brms write-up can be reproduced. The field fits (journal_within,
+               field_within) centre the philosopher indicator and covariates within sets.
 
 Covariates (within-set deviations, so they are identified separately from the set effect):
   log_refs    log1p(referenced_works_count)   reference-list length, a proxy for text length / genre
@@ -44,7 +45,7 @@ def load(cfg: Config, s05_dir: Path, k: int) -> pd.DataFrame:
     d = con.execute(f"""
         WITH s AS (SELECT * FROM read_parquet('{s05_dir / "matched_sets.parquet"}') WHERE k = {k}),
              f AS (SELECT set_id, field AS set_field, domain AS set_domain FROM s WHERE is_focal)
-        SELECT s.set_id, s.work_id, s.is_focal, s.publication_year, s.n_authors, s.cited_by_count,
+        SELECT s.set_id, s.work_id, s.is_focal, s.source_id, s.publication_year, s.n_authors, s.cited_by_count,
                coalesce(s.referenced_works_count, 0) AS n_refs, f.set_field, f.set_domain{meta}
         FROM s JOIN f USING (set_id)
         ORDER BY s.set_id, s.work_id  -- fixed order: LOO comparisons pair fits row by row
@@ -306,49 +307,89 @@ def build_bayesian(d: pd.DataFrame, drivers: list[str]) -> pm.Model:
 NO_FIELD = "No field assigned"
 
 
-def build_field_model(d: pd.DataFrame, scales_path: Path) -> pm.Model:
+FIELD_FITS = {  # fit label -> (column grouping the sets, wording for the figure)
+    "field_within": ("set_field", "field of the philosopher paper"),
+    "journal_within": ("j_field", "main field of the journal"),
+}
+BINARY_DRIVERS = {"has_abstract", "no_prior_record"}
+BETWEEN_DRIVERS = ["log_refs", "has_abstract", "prestige_cnp", "no_prior_record", "log_prior_works_max"]
+
+
+def attach_journal_field(cfg: Config, d: pd.DataFrame) -> pd.DataFrame:
+    """Add each set's journal field: the most common field among all articles in that journal, all years."""
+    path = cfg.derived / "s07" / "journal_field.parquet"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        connect(cfg).execute(f"""
+            COPY (
+                WITH c AS (SELECT source_id, field, count(*) AS n
+                           FROM read_parquet('{cfg.derived / "s02" / "works_slim"}/**/*.parquet') GROUP BY 1, 2),
+                     r AS (SELECT *, sum(n) OVER (PARTITION BY source_id) AS n_articles,
+                                  row_number() OVER (PARTITION BY source_id ORDER BY n DESC, field NULLS LAST) AS rn FROM c)
+                SELECT source_id, field AS j_field, n * 1.0 / n_articles AS j_share, n_articles FROM r WHERE rn = 1
+            ) TO '{path}' (FORMAT parquet)""")
+    jf = pd.read_parquet(path)
+    return d.merge(jf, on="source_id", how="left", validate="many_to_one")
+
+
+def _within_between(d: pd.DataFrame, cols: list[str], between: list[str], mask: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Deviations from the set mean and standardised set means, computed on the rows in `mask`; 0 elsewhere."""
+    sub = d.loc[mask, cols].astype(float)
+    means = sub.groupby(d.loc[mask, "set_id"]).transform("mean")
+    within = (sub - means).reindex(d.index).fillna(0.0)
+    b = means[between]
+    b = ((b - b.mean()) / b.std()).reindex(d.index).fillna(0.0)
+    return within, b
+
+
+def build_field_model(d: pd.DataFrame, scales_path: Path, group: str) -> pm.Model:
     """Hurdle log-normal with a philosopher effect per field, partially pooled across fields.
 
-    logit P(cited)       = a_h + b_h_field[field] * phil + covariates + set effect
-    mean of log(cites)   = a_m + b_m_field[field] * phil + covariates + set effect
-    log sigma            = a_s + set effect
-    The field of a set is the field of its philosopher paper. Field alone is absorbed by the set effects,
-    but philosopher x field varies within sets, so it is identified.
+    logit P(cited)     = a_h + b_h_field[field] * phil_w + X_w * b_h + X_b * bb_h + set effect
+    mean of log(cites) = a_m + b_m_field[field] * phil_w + X_w * b_m + X_b * bb_m + set effect
+    log sigma          = a_s + set effect
+
+    Set effects are shrunk, so they do not absorb field baselines or between-set differences. Without
+    centring, those leak into the philosopher and covariate coefficients. `_w` terms are deviations from
+    the set mean and `X_b` holds the set means, so `b_*_field` and `b_*` rest on within-set contrasts only.
+    The citation part only sees cited papers, so it is centred on the cited papers of each set.
     """
+    d = d.reset_index(drop=True)
     set_idx, sets = pd.factorize(d["set_id"])
-    field_idx, fields = pd.factorize(d["set_field"].fillna(NO_FIELD), sort=True)
+    field_idx, fields = pd.factorize(d[group], sort=True)
     y = d["cited_by_count"].to_numpy().astype(float)
-    phil = d["phil"].to_numpy().astype(float)
     drivers = [x for x in DRIVERS if x != "phil"]
-    X = d[drivers].to_numpy().astype(float)
-    scales = {}
-    for j, name in enumerate(drivers):
-        if set(np.unique(X[:, j])) <= {0.0, 1.0}:
-            scales[name] = {"mean": 0.0, "sd": 1.0}
-            continue
-        m, sd = float(X[:, j].mean()), float(X[:, j].std())
-        scales[name] = {"mean": m, "sd": sd}
-        X[:, j] = (X[:, j] - m) / (sd if sd > 0 else 1)
+    between = [x for x in BETWEEN_DRIVERS if x in drivers]
+    cols = ["phil"] + drivers
+    w_h, x_b_h = _within_between(d, cols, between, pd.Series(True, index=d.index))
+    w_m, x_b_m = _within_between(d, cols, between, d["cited_by_count"] > 0)
+    # one scale for both parts, so the plot converts both with the same divisor; binary drivers stay in raw units
+    scales = {c: {"mean": 0.0, "sd": 1.0 if c in BINARY_DRIVERS else float(w_h[c].std())} for c in drivers}
     scales_path.write_text(json.dumps(scales, indent=1))
-    with pm.Model(coords={"set": sets, "driver": drivers, "field": list(fields)}) as model:
+    sd = np.array([scales[c]["sd"] for c in drivers])
+    ph_h, ph_m = w_h["phil"].to_numpy(), w_m["phil"].to_numpy()
+    X_h, X_m = w_h[drivers].to_numpy() / sd, w_m[drivers].to_numpy() / sd
+    B_h, B_m = x_b_h.to_numpy(), x_b_m.to_numpy()
+    coords = {"set": sets, "driver": drivers, "field": list(fields), "between": between}
+    with pm.Model(coords=coords) as model:
         a_h = pm.Normal("a_h", 0, 1.5)
         mu_h = pm.Normal("mu_h", 0, 1)
         tau_h = pm.HalfNormal("tau_h", 0.5)
-        zf_h = pm.Normal("zf_h", 0, 1, dims="field")
-        b_h_field = pm.Deterministic("b_h_field", mu_h + tau_h * zf_h, dims="field")
+        b_h_field = pm.Normal("b_h_field", mu_h, tau_h, dims="field")  # centred: most fields are well informed
         b_h = pm.Normal("b_h", 0, 1, dims="driver")
+        bb_h = pm.Normal("b_h_between", 0, 1, dims="between")
         s_h = pm.HalfNormal("sd_set_h", 1)
         z_h = pm.Normal("z_h", 0, 1, dims="set")
-        psi = pm.math.sigmoid(a_h + b_h_field[field_idx] * phil + X @ b_h + s_h * z_h[set_idx])
+        psi = pm.math.sigmoid(a_h + b_h_field[field_idx] * ph_h + X_h @ b_h + B_h @ bb_h + s_h * z_h[set_idx])
         a_m = pm.Normal("a_m", 1, 1.5)
         mu_m = pm.Normal("mu_m", 0, 1)
         tau_m = pm.HalfNormal("tau_m", 0.5)
-        zf_m = pm.Normal("zf_m", 0, 1, dims="field")
-        b_m_field = pm.Deterministic("b_m_field", mu_m + tau_m * zf_m, dims="field")
+        b_m_field = pm.Normal("b_m_field", mu_m, tau_m, dims="field")
         b_m = pm.Normal("b_m", 0, 1, dims="driver")
+        bb_m = pm.Normal("b_m_between", 0, 1, dims="between")
         s_m = pm.HalfNormal("sd_set_m", 1)
         z_m = pm.Normal("z_m", 0, 1, dims="set")
-        mu = a_m + b_m_field[field_idx] * phil + X @ b_m + s_m * z_m[set_idx]
+        mu = a_m + b_m_field[field_idx] * ph_m + X_m @ b_m + B_m @ bb_m + s_m * z_m[set_idx]
         a_s = pm.Normal("a_s", 0, 1)
         s_s = pm.HalfNormal("sd_set_s", 0.5)
         z_s = pm.Normal("z_s", 0, 1, dims="set")
@@ -362,12 +403,16 @@ def bayesian(d: pd.DataFrame, out: Path, draws: int, tune: int, chains: int, log
     """Fit the named models. LOO is left to `vop s07-loo`, which works in chunks from the saved files."""
     specs = {"phil_only": ["phil"], "with_drivers": BASE_DRIVERS, "with_track": list(DRIVERS)}
     rows = []
+    all_rows = d
     for label in fit:
-        n_ = d.set_id.nunique()
-        if label == "field_phil":
-            model = build_field_model(d, out / f"hurdle_{label}_n{n_}.scales.json")
-            names = ["a_h", "mu_h", "tau_h", "b_h_field", "b_h", "a_m", "mu_m", "tau_m", "b_m_field", "b_m", "a_s",
-                     "sd_set_h", "sd_set_m", "sd_set_s"]
+        d = all_rows
+        if label in FIELD_FITS:
+            group = FIELD_FITS[label][0]
+            d = d[d[group].notna()]  # no field: sparse records, and for the paper field an artefact of selection
+            n_ = d.set_id.nunique()
+            model = build_field_model(d, out / f"hurdle_{label}_n{n_}.scales.json", group)
+            names = ["a_h", "mu_h", "tau_h", "b_h_field", "b_h", "b_h_between", "a_m", "mu_m", "tau_m", "b_m_field", "b_m",
+                     "b_m_between", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"]
         else:
             model = build_bayesian(d, specs[label])
             names = ["a_h", "b_h", "a_m", "b_m", "a_s", "sd_set_h", "sd_set_m", "sd_set_s"]
@@ -396,7 +441,7 @@ def main(
     dev: bool = typer.Option(False),
     plot_only: bool = typer.Option(False, help="redraw the field figures from the saved tables, no refitting"),
     bayes_only: bool = typer.Option(False, help="skip the fixed-effects models and figures"),
-    fit: str = typer.Option("with_track", help="comma list: phil_only,with_drivers,with_track"),
+    fit: str = typer.Option("with_track", help="comma list: phil_only,with_drivers,with_track,field_within,journal_within"),
 ) -> None:
     cfg = load_config()
     sfx = "_dev" if dev else ""
@@ -405,6 +450,8 @@ def main(
     cfg.reports.mkdir(parents=True, exist_ok=True)
     d = load(cfg, cfg.derived / f"s05{sfx}", k)
     typer.echo(f"k={k}: {len(d):,} rows, {d.set_id.nunique():,} sets, share cited {d.cited.mean():.3f}")
+    if "journal_within" in fit.split(","):
+        d = attach_journal_field(cfg, d)
 
     if plot_only:
         freq = pd.read_csv(out / f"hurdle_frequentist_k{k}.csv")

@@ -1,0 +1,108 @@
+/data/openalex_project_storage/vop/derived_journal/s02/works_slim 382
+['work_id', 'publication_date', 'type', 'language', 'is_retracted', 'is_paratext', 'source_id', 'issn_l', 'source_type', 'author_ids', 'n_authorships', 'authors_count', 'cited_by_count', 'counts_by_year', 'referenced_works_count', 'fwci', 'cnp', 'topic_id', 'subfield_id', 'subfield', 'field', 'domain', 'updated_date', 'has_abstract', 'has_fulltext', 'n_pages', 'publication_year']
+source-field rows 1947165
+sets 86779 journals 17329
+== how pure are the journals these sets sit in (top field's share of ALL articles in the journal), weighted by sets
+count    86779.000
+mean         0.641
+std          0.189
+min          0.109
+10%          0.381
+25%          0.504
+50%          0.650
+75%          0.792
+90%          0.889
+max          1.000
+share of sets in journals where top field holds >=90%: 0.085 >=75%: 0.32 <50%: 0.243
+== does the philosopher paper's field equal its journal's top field; do controls share the philosopher paper's field
+                                              n_sets  paper_eq_journal  journal_purity  control_same_field  control_no_field
+set_field                                                                                                                   
+Social Sciences                                29492              0.69            0.65                0.55              0.01
+Arts and Humanities                            19035              0.80            0.72                0.67              0.01
+Psychology                                      9405              0.40            0.58                0.30              0.01
+Medicine                                        6777              0.71            0.60                0.52              0.01
+Computer Science                                4586              0.58            0.70                0.50              0.01
+Mathematics                                     2893              0.72            0.76                0.64              0.02
+Neuroscience                                    2246              0.24            0.50                0.25              0.01
+Decision Sciences                               1536              0.09            0.49                0.11              0.01
+Economics, Econometrics and Finance             1522              0.33            0.56                0.26              0.01
+Business, Management and Accounting             1400              0.59            0.58                0.42              0.01
+Physics and Astronomy                           1384              0.62            0.62                0.49              0.01
+Health Professions                              1364              0.17            0.52                0.19              0.01
+Environmental Science                           1338              0.37            0.54                0.27              0.01
+No field                                        1115              0.00            0.60                0.00              0.18
+Engineering                                      807              0.51            0.57                0.38              0.01
+Biochemistry, Genetics and Molecular Biology     696              0.42            0.52                0.28              0.01
+Agricultural and Biological Sciences             381              0.29            0.53                0.26              0.01
+Earth and Planetary Sciences                     153              0.50            0.55                0.36              0.01
+Pharmacology, Toxicology and Pharmaceutics       144              0.08            0.50                0.07              0.01
+Veterinary                                       110              0.25            0.48                0.18              0.01
+Chemistry                                        108              0.43            0.52                0.30              0.02
+Nursing                                           85              0.21            0.44                0.16              0.01
+Materials Science                                 68              0.38            0.52                0.32              0.00
+Immunology and Microbiology                       44              0.09            0.55                0.06              0.01
+Energy                                            37              0.14            0.51                0.10              0.03
+Dentistry                                         29              0.48            0.54                0.34              0.01
+Chemical Engineering                              24              0.04            0.48                0.07              0.00
+overall: paper field == journal top field 0.616 ; control field == philosopher paper field 0.499
+== cross-tab, rows = philosopher paper's field, columns = journal's top field, row shares >=8%
+Social Sciences                            Social Sciences 69%, Arts and Humanities 21%
+Arts and Humanities                        Arts and Humanities 80%, Social Sciences 17%
+Psychology                                 Psychology 40%, Arts and Humanities 32%, Social Sciences 16%
+Medicine                                   Medicine 71%, Social Sciences 10%
+Computer Science                           Computer Science 58%, Mathematics 14%, Social Sciences 9%, Arts and Humanities 9%
+Mathematics                                Mathematics 72%, Arts and Humanities 11%
+Neuroscience                               Psychology 32%, Neuroscience 24%, Arts and Humanities 13%, Medicine 12%, Social Sciences 10%
+Decision Sciences                          Social Sciences 27%, Business, Management and Acc 20%, Psychology 11%, Decision Sciences 9%, Arts and Humanities 8%
+Economics, Econometrics and Finance        Social Sciences 35%, Economics, Econometrics and  33%, Medicine 9%, Arts and Humanities 9%
+Business, Management and Accounting        Business, Management and Acc 59%, Social Sciences 26%
+Physics and Astronomy                      Physics and Astronomy 62%, Arts and Humanities 18%
+Health Professions                         Medicine 51%, Health Professions 17%, Social Sciences 15%
+Environmental Science                      Environmental Science 37%, Social Sciences 28%, Arts and Humanities 15%
+No field                                   Social Sciences 36%, Arts and Humanities 34%
+== reverse: of sets in journals whose top field is X, where do philosopher papers get classified
+Social Sciences                      n= 29251 Social Sciences 70%, Arts and Humanities 11%
+Arts and Humanities                  n= 27125 Arts and Humanities 56%, Social Sciences 23%, Psychology 11%
+Medicine                             n=  7899 Medicine 61%, Health Professions 9%
+Psychology                           n=  5803 Psychology 64%, Neuroscience 12%, Social Sciences 9%
+Computer Science                     n=  3620 Computer Science 74%
+Mathematics                          n=  2883 Mathematics 72%, Computer Science 22%
+Business, Management and Accountin   n=  1642 Business, Management and Acc 50%, Decision Sciences 19%, Social Sciences 18%
+Physics and Astronomy                n=  1202 Physics and Astronomy 71%
+Economics, Econometrics and Financ   n=  1126 Economics, Econometrics and  44%, Social Sciences 28%
+Biochemistry, Genetics and Molecul   n=  1124 Biochemistry, Genetics and M 26%, Medicine 23%, Social Sciences 11%
+Engineering                          n=  1001 Engineering 41%, Social Sciences 12%, Computer Science 9%
+Neuroscience                         n=   992 Neuroscience 53%, Psychology 28%
+prestige covariates attached (616,110 papers)
+== philosopher effect, fixed effects: log citations if cited, and cited points, by field definition
+                                              n_paper  cites_paperfield  cites_samefieldctrl  n_journal  cites_journalfield   se_j  cited_paperfield  cited_samefieldctrl  cited_journalfield
+Social Sciences                               24545.0             0.020               -0.031      24860              -0.018  0.012             2.485                1.426               1.666
+Arts and Humanities                           14305.0            -0.080               -0.019      19564               0.011  0.015            -0.102                0.219               1.171
+Psychology                                     7556.0             0.088                0.069       5243               0.086  0.023             2.368                1.269               2.117
+Medicine                                       6334.0            -0.031                0.010       7484               0.022  0.017             4.348                4.598               4.390
+Computer Science                               4346.0             0.032                0.035       3527               0.041  0.025             3.381                3.058               2.841
+Mathematics                                    2722.0            -0.105               -0.096       2797              -0.030  0.026             0.931                0.628               1.224
+Neuroscience                                   2102.0             0.107                0.079        979               0.036  0.044             1.818                2.057               1.311
+Decision Sciences                              1413.0             0.046                0.006        245              -0.043  0.083             2.882                2.635               3.348
+Economics, Econometrics and Finance            1391.0            -0.125                0.069       1079               0.128  0.049             1.483                0.217               1.009
+Business, Management and Accounting            1272.0             0.067                0.034       1526               0.034  0.040             1.945                1.108               2.129
+Health Professions                             1264.0             0.066                0.128        582               0.017  0.056             5.324                3.632               4.222
+Physics and Astronomy                          1250.0             0.143                0.087       1067               0.162  0.050             3.074                2.685               2.592
+Environmental Science                          1191.0             0.014               -0.142        947              -0.149  0.047             3.932                1.366              -0.271
+Engineering                                     712.0            -0.036               -0.154        873              -0.088  0.052             0.625                1.518              -0.795
+Biochemistry, Genetics and Molecular Biology    656.0             0.040                0.046       1110              -0.208  0.046             1.892                1.575               1.820
+Agricultural and Biological Sciences            340.0             0.014                0.035        313              -0.046  0.080             0.562                1.941              -0.245
+Pharmacology, Toxicology and Pharmaceutics      144.0            -0.084                0.575         26              -0.163  0.270            14.602               26.329              14.072
+Earth and Planetary Sciences                    143.0            -0.194               -0.432        133              -0.245  0.118             1.266                1.263               1.510
+Veterinary                                      105.0            -0.107               -0.400         64              -0.202  0.190             1.728               16.501               4.416
+Chemistry                                        99.0             0.063               -0.172         85              -0.007  0.165            -0.809              -15.876              -4.385
+Nursing                                          75.0             0.034                0.362         83               0.112  0.156             0.912               -3.211               2.949
+Materials Science                                68.0            -0.311               -0.411         61              -0.189  0.161            -5.940              -10.319              -8.422
+Immunology and Microbiology                      37.0             0.124                0.741         15              -0.055  0.366             0.235               -5.960               6.187
+Energy                                           35.0            -0.216               -1.879         12              -0.444  0.421            -4.173               -8.206               7.128
+Dentistry                                        28.0            -0.598               -0.643         49              -0.446  0.177            -1.979               -5.323               2.481
+Chemical Engineering                             22.0             0.034                0.907          1               0.969  0.006            12.399               -2.733             -10.346
+No field                                          NaN               NaN                  NaN        206               0.077  0.146               NaN                  NaN               5.886
+mean sets per same-field subset control count: {'count': 86779.0, 'mean': 2.99, 'std': 1.49, 'min': 1.0, '25%': 2.0, '50%': 3.0, '75%': 4.0, 'max': 5.0}
+DONE
+EXIT=0
